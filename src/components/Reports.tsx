@@ -13,9 +13,9 @@ const Reports = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [endDate, setEndDate] = new Date().toISOString().split('T')[0];
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedEmployee, setSelectedEmployee] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
 
   useEffect(() => {
     fetchWorkLogs({

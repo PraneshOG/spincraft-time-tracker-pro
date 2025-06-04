@@ -4,7 +4,11 @@ import { Users, Clock, Calendar, TrendingUp } from 'lucide-react';
 import { useEmployees, useWorkLogs } from '@/hooks/useSupabaseData';
 import { useEffect } from 'react';
 
-const Dashboard = () => {
+interface DashboardProps {
+  onNavigate?: (tab: string) => void;
+}
+
+const Dashboard = ({ onNavigate }: DashboardProps) => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
 
@@ -56,6 +60,12 @@ const Dashboard = () => {
       color: "text-orange-600",
     },
   ];
+
+  const handleQuickAction = (tab: string) => {
+    if (onNavigate) {
+      onNavigate(tab);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -129,15 +139,24 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+              <div 
+                className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleQuickAction('employees')}
+              >
                 <p className="font-medium">Add New Employee</p>
                 <p className="text-sm text-muted-foreground">Register a new team member</p>
               </div>
-              <div className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+              <div 
+                className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleQuickAction('tracking')}
+              >
                 <p className="font-medium">Log Work Hours</p>
                 <p className="text-sm text-muted-foreground">Record today's attendance</p>
               </div>
-              <div className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+              <div 
+                className="p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleQuickAction('reports')}
+              >
                 <p className="font-medium">Generate Report</p>
                 <p className="text-sm text-muted-foreground">Export time tracking data</p>
               </div>

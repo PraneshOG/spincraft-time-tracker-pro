@@ -12,7 +12,7 @@ import { CalendarDay } from '@/types';
 const CalendarView = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
-  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedDayLog, setSelectedDayLog] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -25,7 +25,7 @@ const CalendarView = () => {
     const endDate = new Date(currentYear, currentMonth + 1, 0).toISOString().split('T')[0];
     
     fetchWorkLogs({
-      employeeId: selectedEmployee || undefined,
+      employeeId: selectedEmployee === 'all' ? undefined : selectedEmployee,
       startDate,
       endDate,
     });
@@ -35,7 +35,7 @@ const CalendarView = () => {
     const dateStr = date.toISOString().split('T')[0];
     const log = workLogs.find(log => 
       log.date === dateStr && 
-      (!selectedEmployee || log.employee_id === selectedEmployee)
+      (selectedEmployee === 'all' || log.employee_id === selectedEmployee)
     );
     return log;
   };
@@ -122,7 +122,7 @@ const CalendarView = () => {
             <SelectValue placeholder="All Employees" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Employees</SelectItem>
+            <SelectItem value="all">All Employees</SelectItem>
             {employees.map((employee) => (
               <SelectItem key={employee.id} value={employee.id}>
                 {employee.name}
@@ -140,7 +140,7 @@ const CalendarView = () => {
                 {monthNames[currentMonth]} {currentYear}
               </CardTitle>
               <CardDescription>
-                {selectedEmployee 
+                {selectedEmployee !== 'all'
                   ? `Showing calendar for ${employees.find(e => e.id === selectedEmployee)?.name}`
                   : 'Showing calendar for all employees'
                 }

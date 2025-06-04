@@ -22,7 +22,7 @@ const AppContent = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigate={setActiveTab} />;
       case 'employees':
         return <EmployeeManagement />;
       case 'tracking':
@@ -34,7 +34,7 @@ const AppContent = () => {
       case 'logs':
         return <AdminLogs />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={setActiveTab} />;
     }
   };
 
