@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,11 +26,11 @@ const TimeTracking = () => {
   const [editingLog, setEditingLog] = useState<any>(null);
 
   const [formData, setFormData] = useState({
-    employeeId: '',
+    employee_id: '',
     date: new Date().toISOString().split('T')[0],
-    startTime: '',
-    endTime: '',
-    totalHours: 0,
+    start_time: '',
+    end_time: '',
+    total_hours: 0,
     status: 'present' as 'present' | 'absent' | 'overtime' | 'holiday',
     notes: '',
   });
@@ -55,14 +54,14 @@ const TimeTracking = () => {
     e.preventDefault();
     
     try {
-      const calculatedHours = formData.startTime && formData.endTime 
-        ? calculateHours(formData.startTime, formData.endTime)
-        : formData.totalHours;
+      const calculatedHours = formData.start_time && formData.end_time 
+        ? calculateHours(formData.start_time, formData.end_time)
+        : formData.total_hours;
 
       const logData = {
         ...formData,
-        totalHours: calculatedHours,
-        createdBy: admin?.id || 'admin',
+        total_hours: calculatedHours,
+        created_by: admin?.id || 'admin',
       };
 
       if (editingLog) {
@@ -74,7 +73,7 @@ const TimeTracking = () => {
         });
       } else {
         await addWorkLog(logData);
-        const employee = employees.find(emp => emp.id === formData.employeeId);
+        const employee = employees.find(emp => emp.id === formData.employee_id);
         await addAdminLog('ADD_WORKLOG', `Added work log for ${employee?.name} on ${formData.date}`, admin?.id || 'admin');
         toast({
           title: "Work Log Added",
@@ -83,11 +82,11 @@ const TimeTracking = () => {
       }
 
       setFormData({
-        employeeId: '',
+        employee_id: '',
         date: new Date().toISOString().split('T')[0],
-        startTime: '',
-        endTime: '',
-        totalHours: 0,
+        start_time: '',
+        end_time: '',
+        total_hours: 0,
         status: 'present',
         notes: '',
       });
@@ -105,11 +104,11 @@ const TimeTracking = () => {
   const handleEdit = (log: any) => {
     setEditingLog(log);
     setFormData({
-      employeeId: log.employee_id,
+      employee_id: log.employee_id,
       date: log.date,
-      startTime: log.start_time || '',
-      endTime: log.end_time || '',
-      totalHours: log.total_hours,
+      start_time: log.start_time || '',
+      end_time: log.end_time || '',
+      total_hours: log.total_hours,
       status: log.status,
       notes: log.notes || '',
     });
@@ -178,8 +177,8 @@ const TimeTracking = () => {
               <div className="space-y-2">
                 <Label htmlFor="employee">Employee</Label>
                 <Select
-                  value={formData.employeeId}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}
+                  value={formData.employee_id}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, employee_id: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select employee" />
@@ -211,13 +210,13 @@ const TimeTracking = () => {
                   <Input
                     id="startTime"
                     type="time"
-                    value={formData.startTime}
+                    value={formData.start_time}
                     onChange={(e) => {
                       const newStartTime = e.target.value;
                       setFormData(prev => ({ 
                         ...prev, 
-                        startTime: newStartTime,
-                        totalHours: newStartTime && prev.endTime ? calculateHours(newStartTime, prev.endTime) : prev.totalHours
+                        start_time: newStartTime,
+                        total_hours: newStartTime && prev.end_time ? calculateHours(newStartTime, prev.end_time) : prev.total_hours
                       }));
                     }}
                   />
@@ -228,13 +227,13 @@ const TimeTracking = () => {
                   <Input
                     id="endTime"
                     type="time"
-                    value={formData.endTime}
+                    value={formData.end_time}
                     onChange={(e) => {
                       const newEndTime = e.target.value;
                       setFormData(prev => ({ 
                         ...prev, 
-                        endTime: newEndTime,
-                        totalHours: prev.startTime && newEndTime ? calculateHours(prev.startTime, newEndTime) : prev.totalHours
+                        end_time: newEndTime,
+                        total_hours: prev.start_time && newEndTime ? calculateHours(prev.start_time, newEndTime) : prev.total_hours
                       }));
                     }}
                   />
@@ -249,8 +248,8 @@ const TimeTracking = () => {
                   step="0.5"
                   min="0"
                   max="24"
-                  value={formData.totalHours}
-                  onChange={(e) => setFormData(prev => ({ ...prev, totalHours: parseFloat(e.target.value) || 0 }))}
+                  value={formData.total_hours}
+                  onChange={(e) => setFormData(prev => ({ ...prev, total_hours: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
               
@@ -294,11 +293,11 @@ const TimeTracking = () => {
                     setIsDialogOpen(false);
                     setEditingLog(null);
                     setFormData({
-                      employeeId: '',
+                      employee_id: '',
                       date: new Date().toISOString().split('T')[0],
-                      startTime: '',
-                      endTime: '',
-                      totalHours: 0,
+                      start_time: '',
+                      end_time: '',
+                      total_hours: 0,
                       status: 'present',
                       notes: '',
                     });

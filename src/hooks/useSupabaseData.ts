@@ -34,7 +34,7 @@ export const useEmployees = () => {
     fetchEmployees();
   }, []);
 
-  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       const { data, error } = await supabase
         .from('employees')
@@ -134,7 +134,7 @@ export const useWorkLogs = () => {
     }
   };
 
-  const addWorkLog = async (workLogData: Omit<WorkLog, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addWorkLog = async (workLogData: Omit<WorkLog, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       const { data, error } = await supabase
         .from('work_logs')

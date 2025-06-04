@@ -2,26 +2,30 @@
 export interface Employee {
   id: string;
   name: string;
-  employeeId: string;
-  contactNo: string;
-  joiningDate: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  employee_id: string;
+  contact_no: string;
+  joining_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WorkLog {
   id: string;
-  employeeId: string;
+  employee_id: string;
   date: string;
-  startTime?: string;
-  endTime?: string;
-  totalHours: number;
+  start_time?: string;
+  end_time?: string;
+  total_hours: number;
   status: 'present' | 'absent' | 'overtime' | 'holiday';
   notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  employees?: {
+    name: string;
+    employee_id: string;
+  };
 }
 
 export interface AdminLog {
@@ -29,7 +33,7 @@ export interface AdminLog {
   action: string;
   details: string;
   timestamp: string;
-  adminId: string;
+  admin_id: string;
 }
 
 export interface Admin {
