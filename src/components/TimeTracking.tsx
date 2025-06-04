@@ -5,10 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock, Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +19,7 @@ const TimeTracking = () => {
   const { admin } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<any>(null);
@@ -28,8 +27,6 @@ const TimeTracking = () => {
   const [formData, setFormData] = useState({
     employee_id: '',
     date: new Date().toISOString().split('T')[0],
-    start_time: '',
-    end_time: '',
     total_hours: 0,
     status: 'present' as 'present' | 'absent' | 'overtime' | 'holiday',
     notes: '',
@@ -42,25 +39,12 @@ const TimeTracking = () => {
     });
   }, [selectedEmployee, selectedDate, fetchWorkLogs]);
 
-  const calculateHours = (start: string, end: string) => {
-    if (!start || !end) return 0;
-    const startTime = new Date(`2000-01-01T${start}`);
-    const endTime = new Date(`2000-01-01T${end}`);
-    const diffMs = endTime.getTime() - startTime.getTime();
-    return Math.max(0, diffMs / (1000 * 60 * 60));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      const calculatedHours = formData.start_time && formData.end_time 
-        ? calculateHours(formData.start_time, formData.end_time)
-        : formData.total_hours;
-
       const logData = {
         ...formData,
-        total_hours: calculatedHours,
         created_by: admin?.id || 'admin',
       };
 
@@ -84,8 +68,6 @@ const TimeTracking = () => {
       setFormData({
         employee_id: '',
         date: new Date().toISOString().split('T')[0],
-        start_time: '',
-        end_time: '',
         total_hours: 0,
         status: 'present',
         notes: '',
@@ -106,8 +88,6 @@ const TimeTracking = () => {
     setFormData({
       employee_id: log.employee_id,
       date: log.date,
-      start_time: log.start_time || '',
-      end_time: log.end_time || '',
       total_hours: log.total_hours,
       status: log.status,
       notes: log.notes || '',
@@ -149,21 +129,21 @@ const TimeTracking = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 p-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Time Tracking</h1>
+          <h1 className="text-2xl font-bold">Time Tracking</h1>
           <p className="text-muted-foreground">Track employee working hours</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
+            <Button className="w-full">
               <Plus className="w-4 h-4 mr-2" />
               Add Work Log
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="mx-4 max-w-sm">
             <DialogHeader>
               <DialogTitle>
                 {editingLog ? 'Edit Work Log' : 'Add Work Log'}
@@ -193,7 +173,6 @@ const TimeTracking = () => {
                 </Select>
               </div>
               
-              
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
                 <Input
@@ -203,42 +182,6 @@ const TimeTracking = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                   required
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startTime">Start Time</Label>
-                  <Input
-                    id="startTime"
-                    type="time"
-                    value={formData.start_time}
-                    onChange={(e) => {
-                      const newStartTime = e.target.value;
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        start_time: newStartTime,
-                        total_hours: newStartTime && prev.end_time ? calculateHours(newStartTime, prev.end_time) : prev.total_hours
-                      }));
-                    }}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="endTime">End Time</Label>
-                  <Input
-                    id="endTime"
-                    type="time"
-                    value={formData.end_time}
-                    onChange={(e) => {
-                      const newEndTime = e.target.value;
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        end_time: newEndTime,
-                        total_hours: prev.start_time && newEndTime ? calculateHours(prev.start_time, newEndTime) : prev.total_hours
-                      }));
-                    }}
-                  />
-                </div>
               </div>
 
               <div className="space-y-2">
@@ -251,6 +194,7 @@ const TimeTracking = () => {
                   max="24"
                   value={formData.total_hours}
                   onChange={(e) => setFormData(prev => ({ ...prev, total_hours: parseFloat(e.target.value) || 0 }))}
+                  placeholder="8"
                 />
               </div>
               
@@ -273,13 +217,13 @@ const TimeTracking = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">Notes (Optional)</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Additional notes..."
-                  rows={3}
+                  rows={2}
                 />
               </div>
               
@@ -296,8 +240,6 @@ const TimeTracking = () => {
                     setFormData({
                       employee_id: '',
                       date: new Date().toISOString().split('T')[0],
-                      start_time: '',
-                      end_time: '',
                       total_hours: 0,
                       status: 'present',
                       notes: '',
@@ -312,25 +254,22 @@ const TimeTracking = () => {
         </Dialog>
       </div>
 
-      
       <Card>
         <CardHeader>
           <CardTitle>Work Logs</CardTitle>
-          <CardDescription>Employee time tracking records</CardDescription>
           
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Search className="w-4 h-4" />
               <Input
                 placeholder="Search employees..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
               />
             </div>
             
             <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-              <SelectTrigger className="max-w-sm">
+              <SelectTrigger>
                 <SelectValue placeholder="Filter by employee" />
               </SelectTrigger>
               <SelectContent>
@@ -347,72 +286,56 @@ const TimeTracking = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="max-w-sm"
             />
           </div>
         </CardHeader>
         
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="mobile-hide">Time</TableHead>
-                  <TableHead>Hours</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-medium">
-                      <div>
-                        <div>{log.employees?.name}</div>
-                        <div className="text-sm text-muted-foreground">{log.employees?.employee_id}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{new Date(log.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="mobile-hide">
-                      {log.start_time && log.end_time ? `${log.start_time} - ${log.end_time}` : '-'}
-                    </TableCell>
-                    <TableCell>{log.total_hours}h</TableCell>
-                    <TableCell>
-                      <Badge className={`${getStatusColor(log.status)} text-white`}>
-                        {log.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(log)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(log)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredLogs.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      No work logs found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+          <div className="space-y-4">
+            {filteredLogs.map((log) => (
+              <div key={log.id} className="border rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium">{log.employees?.name}</h3>
+                    <p className="text-sm text-muted-foreground">ID: {log.employees?.employee_id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(log.date).toLocaleDateString()} • {log.total_hours}h
+                    </p>
+                    {log.notes && (
+                      <p className="text-sm text-muted-foreground mt-1">{log.notes}</p>
+                    )}
+                  </div>
+                  <Badge className={`${getStatusColor(log.status)} text-white`}>
+                    {log.status}
+                  </Badge>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(log)}
+                    className="flex-1"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(log)}
+                    className="flex-1"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {filteredLogs.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No work logs found
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

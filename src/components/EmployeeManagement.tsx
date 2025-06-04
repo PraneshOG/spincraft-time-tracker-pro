@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Search, Plus, Edit, Trash2 } from 'lucide-react';
 import { useEmployees, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
@@ -22,16 +23,25 @@ const EmployeeManagement = () => {
   const [formData, setFormData] = useState({
     name: '',
     employee_id: '',
-    contact_no: '',
+    gender: 'male' as 'male' | 'female',
     joining_date: '',
   });
+
+  const getSalaryPerHour = (gender: 'male' | 'female') => {
+    return gender === 'female' ? 41.25 : 55;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
+      const employeeData = {
+        ...formData,
+        salary_per_hour: getSalaryPerHour(formData.gender),
+      };
+
       if (editingEmployee) {
-        await updateEmployee(editingEmployee.id, formData);
+        await updateEmployee(editingEmployee.id, employeeData);
         await addAdminLog('UPDATE_EMPLOYEE', `Updated employee: ${formData.name} (ID: ${formData.employee_id})`, admin?.id || 'admin');
         toast({
           title: "Employee Updated",
@@ -39,7 +49,7 @@ const EmployeeManagement = () => {
         });
       } else {
         await addEmployee({
-          ...formData,
+          ...employeeData,
           is_active: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -51,7 +61,7 @@ const EmployeeManagement = () => {
         });
       }
 
-      setFormData({ name: '', employee_id: '', contact_no: '', joining_date: '' });
+      setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '' });
       setEditingEmployee(null);
       setIsDialogOpen(false);
     } catch (error) {
@@ -68,7 +78,7 @@ const EmployeeManagement = () => {
     setFormData({
       name: employee.name,
       employee_id: employee.employee_id,
-      contact_no: employee.contact_no,
+      gender: employee.gender,
       joining_date: employee.joining_date,
     });
     setIsDialogOpen(true);
@@ -93,8 +103,7 @@ const EmployeeManagement = () => {
 
   const filteredEmployees = employees.filter(emp => 
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.contact_no.includes(searchTerm)
+    emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -102,27 +111,27 @@ const EmployeeManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 p-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Employee Management</h1>
+          <h1 className="text-2xl font-bold">Employee Management</h1>
           <p className="text-muted-foreground">Manage your workforce</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
+            <Button className="w-full">
               <Plus className="w-4 h-4 mr-2" />
               Add Employee
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="mx-4 max-w-sm">
             <DialogHeader>
               <DialogTitle>
                 {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
               </DialogTitle>
               <DialogDescription>
-                {editingEmployee ? 'Update employee information' : 'Enter employee details to add them to the system'}
+                {editingEmployee ? 'Update employee information' : 'Enter employee details'}
               </DialogDescription>
             </DialogHeader>
             
@@ -149,15 +158,22 @@ const EmployeeManagement = () => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="contact_no">Contact Number</Label>
-                <Input
-                  id="contact_no"
-                  value={formData.contact_no}
-                  onChange={(e) => setFormData(prev => ({ ...prev, contact_no: e.target.value }))}
-                  placeholder="Enter contact number"
-                  required
-                />
+              <div className="space-y-3">
+                <Label>Gender</Label>
+                <RadioGroup
+                  value={formData.gender}
+                  onValueChange={(value: 'male' | 'female') => setFormData(prev => ({ ...prev, gender: value }))}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="male" id="male" />
+                    <Label htmlFor="male">Male (₹55/hr)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="female" id="female" />
+                    <Label htmlFor="female">Female (₹41.25/hr)</Label>
+                  </div>
+                </RadioGroup>
               </div>
               
               <div className="space-y-2">
@@ -181,7 +197,7 @@ const EmployeeManagement = () => {
                   onClick={() => {
                     setIsDialogOpen(false);
                     setEditingEmployee(null);
-                    setFormData({ name: '', employee_id: '', contact_no: '', joining_date: '' });
+                    setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '' });
                   }}
                 >
                   Cancel
@@ -195,9 +211,6 @@ const EmployeeManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle>Employee List</CardTitle>
-          <CardDescription>
-            Manage your team members
-          </CardDescription>
           
           <div className="flex items-center space-x-2">
             <Search className="w-4 h-4" />
@@ -205,63 +218,54 @@ const EmployeeManagement = () => {
               placeholder="Search employees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
             />
           </div>
         </CardHeader>
         
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="mobile-hide">Employee ID</TableHead>
-                  <TableHead className="mobile-hide">Contact</TableHead>
-                  <TableHead>Joining Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
-                    <TableCell className="font-medium">{employee.name}</TableCell>
-                    <TableCell className="mobile-hide">{employee.employee_id}</TableCell>
-                    <TableCell className="mobile-hide">{employee.contact_no}</TableCell>
-                    <TableCell>{new Date(employee.joining_date).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Badge variant="default">Active</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(employee)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(employee)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredEmployees.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      No employees found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+          <div className="space-y-4">
+            {filteredEmployees.map((employee) => (
+              <div key={employee.id} className="border rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium">{employee.name}</h3>
+                    <p className="text-sm text-muted-foreground">ID: {employee.employee_id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {employee.gender} • ₹{employee.salary_per_hour || getSalaryPerHour(employee.gender)}/hr
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Joined: {new Date(employee.joining_date).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge variant="default">Active</Badge>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(employee)}
+                    className="flex-1"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(employee)}
+                    className="flex-1"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {filteredEmployees.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No employees found
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

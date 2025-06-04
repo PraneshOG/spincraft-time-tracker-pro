@@ -3,7 +3,8 @@ export interface Employee {
   id: string;
   name: string;
   employee_id: string;
-  contact_no: string;
+  gender: 'male' | 'female';
+  salary_per_hour: number;
   joining_date: string;
   is_active: boolean;
   created_at: string;
