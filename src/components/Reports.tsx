@@ -13,20 +13,20 @@ const Reports = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = new Date().toISOString().split('T')[0];
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
 
   useEffect(() => {
     fetchWorkLogs({
-      employeeId: selectedEmployee || undefined,
+      employeeId: selectedEmployee === 'all' ? undefined : selectedEmployee,
       startDate,
       endDate,
     });
   }, [startDate, endDate, selectedEmployee, fetchWorkLogs]);
 
   const filteredLogs = workLogs.filter(log => 
-    !selectedStatus || log.status === selectedStatus
+    !selectedStatus || selectedStatus === 'all' || log.status === selectedStatus
   );
 
   const generateSummary = () => {
@@ -179,7 +179,7 @@ const Reports = () => {
                   <SelectValue placeholder="All Employees" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Employees</SelectItem>
+                  <SelectItem value="all">All Employees</SelectItem>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
                       {employee.name}
@@ -196,7 +196,7 @@ const Reports = () => {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="present">Present</SelectItem>
                   <SelectItem value="absent">Absent</SelectItem>
                   <SelectItem value="overtime">Overtime</SelectItem>

@@ -37,7 +37,7 @@ const TimeTracking = () => {
 
   useEffect(() => {
     fetchWorkLogs({
-      employeeId: selectedEmployee || undefined,
+      employeeId: selectedEmployee === 'all' ? undefined : selectedEmployee,
       startDate: selectedDate ? selectedDate : undefined,
     });
   }, [selectedEmployee, selectedDate, fetchWorkLogs]);
@@ -334,7 +334,7 @@ const TimeTracking = () => {
                 <SelectValue placeholder="Filter by employee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Employees</SelectItem>
+                <SelectItem value="all">All Employees</SelectItem>
                 {employees.map((employee) => (
                   <SelectItem key={employee.id} value={employee.id}>
                     {employee.name}
