@@ -121,7 +121,8 @@ export const useWorkLogs = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      setWorkLogs(data || []);
+      // Cast the data to WorkLog[] since we know the structure matches
+      setWorkLogs((data as any) || []);
     } catch (error) {
       console.error('Error fetching work logs:', error);
       toast({

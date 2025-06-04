@@ -28,7 +28,7 @@ const AdminLogs = () => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const groupLogsByDate = (logs: any[]) => {
+  const groupLogsByDate = (logs: typeof adminLogs) => {
     const grouped = logs.reduce((acc, log) => {
       const date = new Date(log.timestamp).toDateString();
       if (!acc[date]) {
@@ -36,7 +36,7 @@ const AdminLogs = () => {
       }
       acc[date].push(log);
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, typeof adminLogs>);
 
     return Object.entries(grouped).sort(([a], [b]) => 
       new Date(b).getTime() - new Date(a).getTime()

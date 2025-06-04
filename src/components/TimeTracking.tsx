@@ -186,12 +186,13 @@ const TimeTracking = () => {
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name} - {employee.employeeId}
+                        {employee.name} - {employee.employee_id}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              
               
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
@@ -311,6 +312,7 @@ const TimeTracking = () => {
         </Dialog>
       </div>
 
+      
       <Card>
         <CardHeader>
           <CardTitle>Work Logs</CardTitle>
