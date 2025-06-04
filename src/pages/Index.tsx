@@ -6,7 +6,10 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/LoginForm';
 import Dashboard from '@/components/Dashboard';
 import EmployeeManagement from '@/components/EmployeeManagement';
-import { Card } from '@/components/ui/card';
+import TimeTracking from '@/components/TimeTracking';
+import CalendarView from '@/components/CalendarView';
+import Reports from '@/components/Reports';
+import AdminLogs from '@/components/AdminLogs';
 
 const AppContent = () => {
   const { isAuthenticated } = useAuth();
@@ -23,33 +26,13 @@ const AppContent = () => {
       case 'employees':
         return <EmployeeManagement />;
       case 'tracking':
-        return (
-          <Card className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Time Tracking</h2>
-            <p className="text-muted-foreground">Time tracking interface coming soon...</p>
-          </Card>
-        );
+        return <TimeTracking />;
       case 'calendar':
-        return (
-          <Card className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Calendar View</h2>
-            <p className="text-muted-foreground">Calendar interface coming soon...</p>
-          </Card>
-        );
+        return <CalendarView />;
       case 'reports':
-        return (
-          <Card className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Reports & Analytics</h2>
-            <p className="text-muted-foreground">Reports interface coming soon...</p>
-          </Card>
-        );
+        return <Reports />;
       case 'logs':
-        return (
-          <Card className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Admin Logs</h2>
-            <p className="text-muted-foreground">Admin logs interface coming soon...</p>
-          </Card>
-        );
+        return <AdminLogs />;
       default:
         return <Dashboard />;
     }

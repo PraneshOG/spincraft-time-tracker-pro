@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,109 +7,99 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Employee, AdminLog } from '@/types';
+import { useEmployees, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
 const EmployeeManagement = () => {
-  const [employees, setEmployees] = useLocalStorage<Employee[]>('spincraft_employees', []);
-  const [adminLogs, setAdminLogs] = useLocalStorage<AdminLog[]>('spincraft_admin_logs', []);
+  const { employees, loading, addEmployee, updateEmployee, deleteEmployee } = useEmployees();
+  const { addAdminLog } = useAdminLogs();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const { admin } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
-    employeeId: '',
-    contactNo: '',
-    joiningDate: '',
+    employee_id: '',
+    contact_no: '',
+    joining_date: '',
   });
 
-  const addAdminLog = (action: string, details: string) => {
-    const log: AdminLog = {
-      id: Date.now().toString(),
-      action,
-      details,
-      timestamp: new Date().toISOString(),
-      adminId: admin?.id || 'unknown',
-    };
-    setAdminLogs(prev => [log, ...prev]);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingEmployee) {
-      // Update existing employee
-      const updatedEmployee: Employee = {
-        ...editingEmployee,
-        ...formData,
-        updatedAt: new Date().toISOString(),
-      };
-      
-      setEmployees(prev => prev.map(emp => 
-        emp.id === editingEmployee.id ? updatedEmployee : emp
-      ));
-      
-      addAdminLog('UPDATE_EMPLOYEE', `Updated employee: ${formData.name} (ID: ${formData.employeeId})`);
+    try {
+      if (editingEmployee) {
+        await updateEmployee(editingEmployee.id, formData);
+        await addAdminLog('UPDATE_EMPLOYEE', `Updated employee: ${formData.name} (ID: ${formData.employee_id})`, admin?.id || 'admin');
+        toast({
+          title: "Employee Updated",
+          description: `${formData.name} has been successfully updated.`,
+        });
+      } else {
+        await addEmployee({
+          ...formData,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as any);
+        await addAdminLog('ADD_EMPLOYEE', `Added new employee: ${formData.name} (ID: ${formData.employee_id})`, admin?.id || 'admin');
+        toast({
+          title: "Employee Added",
+          description: `${formData.name} has been successfully added.`,
+        });
+      }
+
+      setFormData({ name: '', employee_id: '', contact_no: '', joining_date: '' });
+      setEditingEmployee(null);
+      setIsDialogOpen(false);
+    } catch (error) {
       toast({
-        title: "Employee Updated",
-        description: `${formData.name} has been successfully updated.`,
-      });
-    } else {
-      // Add new employee
-      const newEmployee: Employee = {
-        id: Date.now().toString(),
-        ...formData,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      setEmployees(prev => [...prev, newEmployee]);
-      addAdminLog('ADD_EMPLOYEE', `Added new employee: ${formData.name} (ID: ${formData.employeeId})`);
-      toast({
-        title: "Employee Added",
-        description: `${formData.name} has been successfully added.`,
+        title: "Error",
+        description: "Failed to save employee",
+        variant: "destructive",
       });
     }
-
-    setFormData({ name: '', employeeId: '', contactNo: '', joiningDate: '' });
-    setEditingEmployee(null);
-    setIsDialogOpen(false);
   };
 
-  const handleEdit = (employee: Employee) => {
+  const handleEdit = (employee: any) => {
     setEditingEmployee(employee);
     setFormData({
       name: employee.name,
-      employeeId: employee.employeeId,
-      contactNo: employee.contactNo,
-      joiningDate: employee.joiningDate,
+      employee_id: employee.employee_id,
+      contact_no: employee.contact_no,
+      joining_date: employee.joining_date,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (employee: Employee) => {
-    setEmployees(prev => prev.map(emp => 
-      emp.id === employee.id ? { ...emp, isActive: false, updatedAt: new Date().toISOString() } : emp
-    ));
-    addAdminLog('DELETE_EMPLOYEE', `Deactivated employee: ${employee.name} (ID: ${employee.employeeId})`);
-    toast({
-      title: "Employee Deactivated",
-      description: `${employee.name} has been deactivated.`,
-    });
+  const handleDelete = async (employee: any) => {
+    try {
+      await deleteEmployee(employee.id);
+      await addAdminLog('DELETE_EMPLOYEE', `Deactivated employee: ${employee.name} (ID: ${employee.employee_id})`, admin?.id || 'admin');
+      toast({
+        title: "Employee Deactivated",
+        description: `${employee.name} has been deactivated.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to deactivate employee",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredEmployees = employees.filter(emp => 
-    emp.isActive && (
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.contactNo.includes(searchTerm)
-    )
+    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.contact_no.includes(searchTerm)
   );
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Loading employees...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -150,34 +139,34 @@ const EmployeeManagement = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="employeeId">Employee ID</Label>
+                <Label htmlFor="employee_id">Employee ID</Label>
                 <Input
-                  id="employeeId"
-                  value={formData.employeeId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, employeeId: e.target.value }))}
+                  id="employee_id"
+                  value={formData.employee_id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
                   placeholder="Enter employee ID"
                   required
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="contactNo">Contact Number</Label>
+                <Label htmlFor="contact_no">Contact Number</Label>
                 <Input
-                  id="contactNo"
-                  value={formData.contactNo}
-                  onChange={(e) => setFormData(prev => ({ ...prev, contactNo: e.target.value }))}
+                  id="contact_no"
+                  value={formData.contact_no}
+                  onChange={(e) => setFormData(prev => ({ ...prev, contact_no: e.target.value }))}
                   placeholder="Enter contact number"
                   required
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="joiningDate">Joining Date</Label>
+                <Label htmlFor="joining_date">Joining Date</Label>
                 <Input
-                  id="joiningDate"
+                  id="joining_date"
                   type="date"
-                  value={formData.joiningDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, joiningDate: e.target.value }))}
+                  value={formData.joining_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, joining_date: e.target.value }))}
                   required
                 />
               </div>
@@ -192,7 +181,7 @@ const EmployeeManagement = () => {
                   onClick={() => {
                     setIsDialogOpen(false);
                     setEditingEmployee(null);
-                    setFormData({ name: '', employeeId: '', contactNo: '', joiningDate: '' });
+                    setFormData({ name: '', employee_id: '', contact_no: '', joining_date: '' });
                   }}
                 >
                   Cancel
@@ -238,9 +227,9 @@ const EmployeeManagement = () => {
                 {filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell className="font-medium">{employee.name}</TableCell>
-                    <TableCell className="mobile-hide">{employee.employeeId}</TableCell>
-                    <TableCell className="mobile-hide">{employee.contactNo}</TableCell>
-                    <TableCell>{new Date(employee.joiningDate).toLocaleDateString()}</TableCell>
+                    <TableCell className="mobile-hide">{employee.employee_id}</TableCell>
+                    <TableCell className="mobile-hide">{employee.contact_no}</TableCell>
+                    <TableCell>{new Date(employee.joining_date).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Badge variant="default">Active</Badge>
                     </TableCell>

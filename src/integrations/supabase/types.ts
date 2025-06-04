@@ -9,7 +9,113 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      admin_logs: {
+        Row: {
+          action: string
+          admin_id: string
+          details: string
+          id: string
+          timestamp: string | null
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          details: string
+          id?: string
+          timestamp?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          details?: string
+          id?: string
+          timestamp?: string | null
+        }
+        Relationships: []
+      }
+      employees: {
+        Row: {
+          contact_no: string
+          created_at: string | null
+          employee_id: string
+          id: string
+          is_active: boolean | null
+          joining_date: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          contact_no: string
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          is_active?: boolean | null
+          joining_date: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          contact_no?: string
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          is_active?: boolean | null
+          joining_date?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      work_logs: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          date: string
+          employee_id: string | null
+          end_time: string | null
+          id: string
+          notes: string | null
+          start_time: string | null
+          status: string | null
+          total_hours: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          date: string
+          employee_id?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          total_hours?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          date?: string
+          employee_id?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          total_hours?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

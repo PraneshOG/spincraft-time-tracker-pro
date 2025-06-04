@@ -1,25 +1,29 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Clock, Calendar, TrendingUp } from 'lucide-react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Employee, WorkLog } from '@/types';
+import { useEmployees, useWorkLogs } from '@/hooks/useSupabaseData';
+import { useEffect } from 'react';
 
 const Dashboard = () => {
-  const [employees] = useLocalStorage<Employee[]>('spincraft_employees', []);
-  const [workLogs] = useLocalStorage<WorkLog[]>('spincraft_worklogs', []);
+  const { employees } = useEmployees();
+  const { workLogs, fetchWorkLogs } = useWorkLogs();
+
+  useEffect(() => {
+    fetchWorkLogs();
+  }, [fetchWorkLogs]);
 
   const today = new Date().toISOString().split('T')[0];
   const thisMonth = new Date().toISOString().slice(0, 7);
 
   const stats = {
-    totalEmployees: employees.filter(emp => emp.isActive).length,
+    totalEmployees: employees.length,
     presentToday: workLogs.filter(log => log.date === today && log.status === 'present').length,
     totalHoursThisMonth: workLogs
       .filter(log => log.date.startsWith(thisMonth))
-      .reduce((sum, log) => sum + log.totalHours, 0),
+      .reduce((sum, log) => sum + log.total_hours, 0),
     overtimeHours: workLogs
       .filter(log => log.date.startsWith(thisMonth) && log.status === 'overtime')
-      .reduce((sum, log) => sum + Math.max(0, log.totalHours - 8), 0),
+      .reduce((sum, log) => sum + Math.max(0, log.total_hours - 8), 0),
   };
 
   const statCards = [
@@ -90,10 +94,10 @@ const Dashboard = () => {
           <CardContent>
             <div className="space-y-4">
               {workLogs
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                 .slice(0, 5)
                 .map((log) => {
-                  const employee = employees.find(emp => emp.id === log.employeeId);
+                  const employee = employees.find(emp => emp.id === log.employee_id);
                   return (
                     <div key={log.id} className="flex items-center space-x-4">
                       <div className={`w-2 h-2 rounded-full ${
@@ -105,7 +109,7 @@ const Dashboard = () => {
                       <div className="flex-1">
                         <p className="text-sm font-medium">{employee?.name || 'Unknown'}</p>
                         <p className="text-xs text-muted-foreground">
-                          {log.date} - {log.totalHours}h ({log.status})
+                          {log.date} - {log.total_hours}h ({log.status})
                         </p>
                       </div>
                     </div>
