@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, WorkLog, AdminLog } from '@/types';
@@ -182,12 +181,27 @@ export const useWorkLogs = () => {
     }
   };
 
+  const addBulkWorkLogs = async (workLogs: Omit<WorkLog, 'id' | 'created_at' | 'updated_at'>[]) => {
+    try {
+      const { error } = await supabase
+        .from('work_logs')
+        .insert(workLogs);
+      
+      if (error) throw error;
+      await fetchWorkLogs();
+    } catch (error) {
+      console.error('Error adding bulk work logs:', error);
+      throw error;
+    }
+  };
+
   return {
     workLogs,
     loading,
     addWorkLog,
     updateWorkLog,
     deleteWorkLog,
+    addBulkWorkLogs,
     fetchWorkLogs
   };
 };
@@ -235,5 +249,112 @@ export const useAdminLogs = () => {
     loading,
     addAdminLog,
     refetch: fetchAdminLogs
+  };
+};
+
+// Hook for salary calculations
+export const useSalaryCalculations = () => {
+  const [salaryCalculations, setSalaryCalculations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSalaryCalculations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('salary_calculations')
+        .select(`
+          *,
+          employees (
+            name,
+            employee_id
+          )
+        `)
+        .order('calculation_date', { ascending: false });
+      
+      if (error) throw error;
+      setSalaryCalculations(data || []);
+    } catch (error) {
+      console.error('Error fetching salary calculations:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch salary calculations",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateSalaryForPeriod = async (startDate: string, endDate: string) => {
+    try {
+      // Get all work logs for the period
+      const { data: workLogs, error: workLogsError } = await supabase
+        .from('work_logs')
+        .select(`
+          *,
+          employees (
+            id,
+            name,
+            employee_id,
+            salary_per_hour
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .eq('status', 'present');
+
+      if (workLogsError) throw workLogsError;
+
+      // Group by employee and calculate totals
+      const employeeTotals = workLogs?.reduce((acc: any, log: any) => {
+        const empId = log.employee_id;
+        if (!acc[empId]) {
+          acc[empId] = {
+            employee_id: empId,
+            employee: log.employees,
+            total_hours: 0,
+            hourly_rate: log.employees?.salary_per_hour || 0
+          };
+        }
+        acc[empId].total_hours += log.total_hours;
+        return acc;
+      }, {});
+
+      // Create salary calculation records
+      const salaryCalculations = Object.values(employeeTotals || {}).map((emp: any) => ({
+        employee_id: emp.employee_id,
+        calculation_date: new Date().toISOString().split('T')[0],
+        start_date: startDate,
+        end_date: endDate,
+        total_hours: emp.total_hours,
+        hourly_rate: emp.hourly_rate,
+        total_salary: emp.total_hours * emp.hourly_rate,
+        status: 'pending'
+      }));
+
+      if (salaryCalculations.length > 0) {
+        const { error } = await supabase
+          .from('salary_calculations')
+          .insert(salaryCalculations);
+        
+        if (error) throw error;
+        await fetchSalaryCalculations();
+      }
+
+      return salaryCalculations;
+    } catch (error) {
+      console.error('Error calculating salary:', error);
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    fetchSalaryCalculations();
+  }, []);
+
+  return {
+    salaryCalculations,
+    loading,
+    fetchSalaryCalculations,
+    calculateSalaryForPeriod
   };
 };

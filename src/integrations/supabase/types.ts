@@ -35,36 +35,89 @@ export type Database = {
       }
       employees: {
         Row: {
-          contact_no: string
           created_at: string | null
           employee_id: string
+          gender: string
           id: string
           is_active: boolean | null
           joining_date: string
           name: string
+          salary_per_hour: number | null
           updated_at: string | null
         }
         Insert: {
-          contact_no: string
           created_at?: string | null
           employee_id: string
+          gender: string
           id?: string
           is_active?: boolean | null
           joining_date: string
           name: string
+          salary_per_hour?: number | null
           updated_at?: string | null
         }
         Update: {
-          contact_no?: string
           created_at?: string | null
           employee_id?: string
+          gender?: string
           id?: string
           is_active?: boolean | null
           joining_date?: string
           name?: string
+          salary_per_hour?: number | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      salary_calculations: {
+        Row: {
+          calculation_date: string
+          created_at: string | null
+          employee_id: string
+          end_date: string
+          hourly_rate: number
+          id: string
+          start_date: string
+          status: string | null
+          total_hours: number
+          total_salary: number
+          updated_at: string | null
+        }
+        Insert: {
+          calculation_date: string
+          created_at?: string | null
+          employee_id: string
+          end_date: string
+          hourly_rate?: number
+          id?: string
+          start_date: string
+          status?: string | null
+          total_hours?: number
+          total_salary?: number
+          updated_at?: string | null
+        }
+        Update: {
+          calculation_date?: string
+          created_at?: string | null
+          employee_id?: string
+          end_date?: string
+          hourly_rate?: number
+          id?: string
+          start_date?: string
+          status?: string | null
+          total_hours?: number
+          total_salary?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_calculations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       work_logs: {
         Row: {

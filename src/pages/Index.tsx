@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/LoginForm';
 import Dashboard from '@/components/Dashboard';
 import EmployeeManagement from '@/components/EmployeeManagement';
-import TimeTracking from '@/components/TimeTracking';
+import BulkTimeTracking from '@/components/BulkTimeTracking';
 import CalendarView from '@/components/CalendarView';
 import Reports from '@/components/Reports';
 import AdminLogs from '@/components/AdminLogs';
@@ -26,7 +26,7 @@ const AppContent = () => {
       case 'employees':
         return <EmployeeManagement />;
       case 'tracking':
-        return <TimeTracking />;
+        return <BulkTimeTracking />;
       case 'calendar':
         return <CalendarView />;
       case 'reports':

@@ -49,3 +49,21 @@ export interface CalendarDay {
   isToday: boolean;
   isCurrentMonth: boolean;
 }
+
+export interface SalaryCalculation {
+  id: string;
+  employee_id: string;
+  calculation_date: string;
+  start_date: string;
+  end_date: string;
+  total_hours: number;
+  hourly_rate: number;
+  total_salary: number;
+  status: 'pending' | 'paid';
+  created_at: string;
+  updated_at: string;
+  employees?: {
+    name: string;
+    employee_id: string;
+  };
+}
