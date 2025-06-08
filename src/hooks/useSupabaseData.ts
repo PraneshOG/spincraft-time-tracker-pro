@@ -36,9 +36,18 @@ export const useEmployees = () => {
 
   const addEmployee = async (employeeData: Omit<Employee, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      // Create the data object that matches the database schema
+      const dataToInsert = {
+        name: employeeData.name,
+        gender: employeeData.gender,
+        joining_date: employeeData.joining_date,
+        salary_per_hour: employeeData.salary_per_hour,
+        is_active: true
+      };
+
       const { data, error } = await supabase
         .from('employees')
-        .insert([employeeData])
+        .insert([dataToInsert])
         .select()
         .single();
       

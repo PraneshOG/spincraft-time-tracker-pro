@@ -186,7 +186,6 @@ const BulkTimeTracking = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee</TableHead>
-                    <TableHead>ID</TableHead>
                     <TableHead>Hours</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Hourly Rate</TableHead>
@@ -202,7 +201,6 @@ const BulkTimeTracking = () => {
                     return (
                       <TableRow key={employee.id}>
                         <TableCell className="font-medium">{employee.name}</TableCell>
-                        <TableCell>{employee.employee_id}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
