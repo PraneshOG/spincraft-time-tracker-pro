@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -114,8 +115,7 @@ const TimeTracking = () => {
 
   const filteredLogs = workLogs.filter(log => 
     !searchTerm || 
-    log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.employees?.employee_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusColor = (status: string) => {
@@ -166,7 +166,7 @@ const TimeTracking = () => {
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name} - {employee.employee_id}
+                        {employee.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -297,7 +297,6 @@ const TimeTracking = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-medium">{log.employees?.name}</h3>
-                    <p className="text-sm text-muted-foreground">ID: {log.employees?.employee_id}</p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(log.date).toLocaleDateString()} • {log.total_hours}h
                     </p>

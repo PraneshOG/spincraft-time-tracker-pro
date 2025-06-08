@@ -1,8 +1,6 @@
-
 export interface Employee {
   id: string;
   name: string;
-  employee_id: string;
   gender: 'male' | 'female';
   salary_per_hour: number;
   joining_date: string;

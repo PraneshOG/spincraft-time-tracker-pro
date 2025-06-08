@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, WorkLog, AdminLog } from '@/types';
@@ -103,8 +102,7 @@ export const useWorkLogs = () => {
         .select(`
           *,
           employees (
-            name,
-            employee_id
+            name
           )
         `)
         .order('date', { ascending: false });
@@ -266,8 +264,7 @@ export const useSalaryCalculations = () => {
         .select(`
           *,
           employees (
-            name,
-            employee_id
+            name
           )
         `)
         .order('calculation_date', { ascending: false });
@@ -296,7 +293,6 @@ export const useSalaryCalculations = () => {
           employees (
             id,
             name,
-            employee_id,
             salary_per_hour
           )
         `)

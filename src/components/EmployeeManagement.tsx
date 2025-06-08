@@ -23,7 +23,6 @@ const EmployeeManagement = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    employee_id: '',
     gender: 'male' as 'male' | 'female',
     joining_date: '',
     salary_per_hour: 0,
@@ -39,7 +38,7 @@ const EmployeeManagement = () => {
 
       if (editingEmployee) {
         await updateEmployee(editingEmployee.id, employeeData);
-        await addAdminLog('UPDATE_EMPLOYEE', `Updated employee: ${formData.name} (ID: ${formData.employee_id})`, admin?.id || 'admin');
+        await addAdminLog('UPDATE_EMPLOYEE', `Updated employee: ${formData.name}`, admin?.id || 'admin');
         toast({
           title: "Employee Updated",
           description: `${formData.name} has been successfully updated.`,
@@ -51,14 +50,14 @@ const EmployeeManagement = () => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         } as any);
-        await addAdminLog('ADD_EMPLOYEE', `Added new employee: ${formData.name} (ID: ${formData.employee_id})`, admin?.id || 'admin');
+        await addAdminLog('ADD_EMPLOYEE', `Added new employee: ${formData.name}`, admin?.id || 'admin');
         toast({
           title: "Employee Added",
           description: `${formData.name} has been successfully added.`,
         });
       }
 
-      setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
+      setFormData({ name: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
       setEditingEmployee(null);
       setIsDialogOpen(false);
     } catch (error) {
@@ -74,7 +73,6 @@ const EmployeeManagement = () => {
     setEditingEmployee(employee);
     setFormData({
       name: employee.name,
-      employee_id: employee.employee_id,
       gender: employee.gender,
       joining_date: employee.joining_date,
       salary_per_hour: employee.salary_per_hour || 0,
@@ -85,7 +83,7 @@ const EmployeeManagement = () => {
   const handleDelete = async (employee: any) => {
     try {
       await deleteEmployee(employee.id);
-      await addAdminLog('DELETE_EMPLOYEE', `Deactivated employee: ${employee.name} (ID: ${employee.employee_id})`, admin?.id || 'admin');
+      await addAdminLog('DELETE_EMPLOYEE', `Deactivated employee: ${employee.name}`, admin?.id || 'admin');
       toast({
         title: "Employee Deactivated",
         description: `${employee.name} has been deactivated.`,
@@ -100,8 +98,7 @@ const EmployeeManagement = () => {
   };
 
   const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
+    emp.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const formatDate = (dateString: string) => {
@@ -149,17 +146,6 @@ const EmployeeManagement = () => {
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Enter full name"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="employee_id">Employee ID</Label>
-                <Input
-                  id="employee_id"
-                  value={formData.employee_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
-                  placeholder="Enter employee ID"
                   required
                 />
               </div>
@@ -217,7 +203,7 @@ const EmployeeManagement = () => {
                   onClick={() => {
                     setIsDialogOpen(false);
                     setEditingEmployee(null);
-                    setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
+                    setFormData({ name: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
                   }}
                 >
                   Cancel
@@ -249,7 +235,6 @@ const EmployeeManagement = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-medium">{employee.name}</h3>
-                    <p className="text-sm text-muted-foreground">ID: {employee.employee_id}</p>
                     <p className="text-sm text-muted-foreground">
                       {employee.gender} • ₹{employee.salary_per_hour}/hr
                     </p>
