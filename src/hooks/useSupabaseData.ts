@@ -17,7 +17,8 @@ export const useEmployees = () => {
         .order('name');
       
       if (error) throw error;
-      setEmployees(data || []);
+      // Cast the data to Employee[] to fix the type error
+      setEmployees((data as Employee[]) || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast({
@@ -121,7 +122,8 @@ export const useWorkLogs = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      setWorkLogs(data || []);
+      // Cast the data to WorkLog[] since we know the structure matches
+      setWorkLogs((data as WorkLog[]) || []);
     } catch (error) {
       console.error('Error fetching work logs:', error);
       toast({
