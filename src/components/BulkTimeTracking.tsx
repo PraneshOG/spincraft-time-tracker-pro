@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Save, Calendar } from 'lucide-react';
-import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
+import { Save, Calendar, Calculator } from 'lucide-react';
+import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -16,6 +15,7 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { addBulkWorkLogs, workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
+  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -86,16 +86,6 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      // Delete existing logs for this date first
-      const existingLogIds = workLogs
-        .filter(log => log.date === selectedDate)
-        .map(log => log.id);
-
-      if (existingLogIds.length > 0) {
-        // You might want to add a delete method to your hook
-        // For now, we'll just insert new ones
-      }
-
       await addBulkWorkLogs(workLogsToSave);
       await addAdminLog('BULK_TIME_TRACKING', `Added time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
       
@@ -110,6 +100,35 @@ const BulkTimeTracking = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleCalculateSalary = async () => {
+    try {
+      const today = new Date();
+      const endDate = today.toISOString().split('T')[0];
+      const startDate = new Date(today.getTime() - (15 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      
+      const calculations = await calculateSalaryForPeriod(startDate, endDate);
+      
+      toast({
+        title: "Salary Calculated",
+        description: `Calculated salary for ${calculations.length} employees for the last 15 days.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to calculate salary",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -149,13 +168,17 @@ const BulkTimeTracking = () => {
                 <Save className="w-4 h-4 mr-2" />
                 Save All
               </Button>
+              <Button onClick={handleCalculateSalary} variant="outline">
+                <Calculator className="w-4 h-4 mr-2" />
+                Calculate 15-Day Salary
+              </Button>
             </div>
           </CardHeader>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Employee Hours for {new Date(selectedDate).toLocaleDateString()}</CardTitle>
+            <CardTitle>Employee Hours for {formatDate(selectedDate)}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">

@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,11 +26,8 @@ const EmployeeManagement = () => {
     employee_id: '',
     gender: 'male' as 'male' | 'female',
     joining_date: '',
+    salary_per_hour: 0,
   });
-
-  const getSalaryPerHour = (gender: 'male' | 'female') => {
-    return gender === 'female' ? 41.25 : 55;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +35,6 @@ const EmployeeManagement = () => {
     try {
       const employeeData = {
         ...formData,
-        salary_per_hour: getSalaryPerHour(formData.gender),
       };
 
       if (editingEmployee) {
@@ -61,7 +58,7 @@ const EmployeeManagement = () => {
         });
       }
 
-      setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '' });
+      setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
       setEditingEmployee(null);
       setIsDialogOpen(false);
     } catch (error) {
@@ -80,6 +77,7 @@ const EmployeeManagement = () => {
       employee_id: employee.employee_id,
       gender: employee.gender,
       joining_date: employee.joining_date,
+      salary_per_hour: employee.salary_per_hour || 0,
     });
     setIsDialogOpen(true);
   };
@@ -105,6 +103,14 @@ const EmployeeManagement = () => {
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading employees...</div>;
@@ -167,13 +173,27 @@ const EmployeeManagement = () => {
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="male" id="male" />
-                    <Label htmlFor="male">Male (₹55/hr)</Label>
+                    <Label htmlFor="male">Male</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="female" id="female" />
-                    <Label htmlFor="female">Female (₹41.25/hr)</Label>
+                    <Label htmlFor="female">Female</Label>
                   </div>
                 </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="salary_per_hour">Salary per Hour (₹)</Label>
+                <Input
+                  id="salary_per_hour"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={formData.salary_per_hour}
+                  onChange={(e) => setFormData(prev => ({ ...prev, salary_per_hour: parseFloat(e.target.value) || 0 }))}
+                  placeholder="Enter hourly rate"
+                  required
+                />
               </div>
               
               <div className="space-y-2">
@@ -197,7 +217,7 @@ const EmployeeManagement = () => {
                   onClick={() => {
                     setIsDialogOpen(false);
                     setEditingEmployee(null);
-                    setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '' });
+                    setFormData({ name: '', employee_id: '', gender: 'male', joining_date: '', salary_per_hour: 0 });
                   }}
                 >
                   Cancel
@@ -231,10 +251,10 @@ const EmployeeManagement = () => {
                     <h3 className="font-medium">{employee.name}</h3>
                     <p className="text-sm text-muted-foreground">ID: {employee.employee_id}</p>
                     <p className="text-sm text-muted-foreground">
-                      {employee.gender} • ₹{employee.salary_per_hour || getSalaryPerHour(employee.gender)}/hr
+                      {employee.gender} • ₹{employee.salary_per_hour}/hr
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Joined: {new Date(employee.joining_date).toLocaleDateString()}
+                      Joined: {formatDate(employee.joining_date)}
                     </p>
                   </div>
                   <Badge variant="default">Active</Badge>

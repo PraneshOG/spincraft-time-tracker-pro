@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, WorkLog, AdminLog } from '@/types';
@@ -16,7 +17,8 @@ export const useEmployees = () => {
         .order('name');
       
       if (error) throw error;
-      setEmployees(data || []);
+      // Cast the data to Employee[] to fix the type error
+      setEmployees((data as Employee[]) || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast({
