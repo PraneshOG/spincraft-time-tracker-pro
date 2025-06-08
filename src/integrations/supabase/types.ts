@@ -42,7 +42,7 @@ export type Database = {
           is_active: boolean | null
           joining_date: string
           name: string
-          salary_per_hour: number | null
+          salary_per_hour: number
           updated_at: string | null
         }
         Insert: {
@@ -53,7 +53,7 @@ export type Database = {
           is_active?: boolean | null
           joining_date: string
           name: string
-          salary_per_hour?: number | null
+          salary_per_hour?: number
           updated_at?: string | null
         }
         Update: {
@@ -64,7 +64,7 @@ export type Database = {
           is_active?: boolean | null
           joining_date?: string
           name?: string
-          salary_per_hour?: number | null
+          salary_per_hour?: number
           updated_at?: string | null
         }
         Relationships: []

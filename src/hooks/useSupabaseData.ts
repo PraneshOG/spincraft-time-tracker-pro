@@ -17,8 +17,7 @@ export const useEmployees = () => {
         .order('name');
       
       if (error) throw error;
-      // Cast the data to Employee[] to fix the type error
-      setEmployees((data as Employee[]) || []);
+      setEmployees(data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast({
@@ -122,8 +121,7 @@ export const useWorkLogs = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      // Cast the data to WorkLog[] since we know the structure matches
-      setWorkLogs((data as any) || []);
+      setWorkLogs(data || []);
     } catch (error) {
       console.error('Error fetching work logs:', error);
       toast({
@@ -288,7 +286,7 @@ export const useSalaryCalculations = () => {
 
   const calculateSalaryForPeriod = async (startDate: string, endDate: string) => {
     try {
-      // Get all work logs for the period
+      // Get all work logs for the period with status 'present'
       const { data: workLogs, error: workLogsError } = await supabase
         .from('work_logs')
         .select(`
