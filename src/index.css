@@ -5,82 +5,82 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 0 0% 98%;
+    --foreground: 220 15% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 15% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 15% 15%;
 
-    --primary: 215 100% 45%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 210 85% 35%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 210 15% 92%;
+    --secondary-foreground: 220 15% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 15% 94%;
+    --muted-foreground: 220 10% 40%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 15% 90%;
+    --accent-foreground: 220 15% 20%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 75% 45%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 215 100% 45%;
+    --border: 210 20% 85%;
+    --input: 210 20% 85%;
+    --ring: 210 85% 35%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 215 28% 17%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 215 100% 45%;
+    --sidebar-background: 210 25% 25%;
+    --sidebar-foreground: 210 10% 95%;
+    --sidebar-primary: 210 85% 40%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 215 28% 20%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 215 28% 20%;
-    --sidebar-ring: 215 100% 45%;
+    --sidebar-accent: 210 25% 30%;
+    --sidebar-accent-foreground: 210 10% 95%;
+    --sidebar-border: 210 25% 30%;
+    --sidebar-ring: 210 85% 40%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 220 15% 8%;
+    --foreground: 210 10% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 15% 10%;
+    --card-foreground: 210 10% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 15% 10%;
+    --popover-foreground: 210 10% 92%;
 
-    --primary: 215 100% 55%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 210 85% 50%;
+    --primary-foreground: 220 15% 8%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 210 10% 85%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 210 10% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 220 15% 15%;
+    --accent-foreground: 210 10% 85%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 210 10% 92%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 215 100% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 215 100% 55%;
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 210 85% 50%;
+    --sidebar-background: 220 15% 5%;
+    --sidebar-foreground: 210 10% 90%;
+    --sidebar-primary: 210 85% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 215 100% 55%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-accent-foreground: 210 10% 90%;
+    --sidebar-border: 220 15% 12%;
+    --sidebar-ring: 210 85% 50%;
   }
 }
 
@@ -90,40 +90,129 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground text-base leading-relaxed;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  /* Enhanced typography for better readability */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+    line-height: 1.4;
+  }
+
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  /* Improved button styling for older users */
+  button {
+    @apply min-h-12 text-base font-medium;
+    min-width: 120px;
+  }
+
+  /* Enhanced input styling */
+  input, select, textarea {
+    @apply min-h-12 text-base;
+    border-width: 2px;
+  }
+
+  /* Better focus indicators */
+  *:focus-visible {
+    @apply ring-4 ring-primary/30 outline-none;
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar with better visibility */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 12px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: hsl(var(--muted));
+  border-radius: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: hsl(var(--muted-foreground));
-  border-radius: 3px;
+  border-radius: 6px;
+  border: 2px solid hsl(var(--muted));
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--foreground));
 }
 
-/* Calendar styling */
+/* Calendar styling with better contrast */
 .calendar-cell {
   transition: all 0.2s ease;
+  @apply min-h-12 min-w-12 text-base;
 }
 
 .calendar-cell:hover {
-  transform: scale(1.02);
+  transform: scale(1.05);
+  @apply bg-accent;
 }
 
-/* Mobile optimizations */
+/* Enhanced table styling */
+table {
+  @apply text-base;
+}
+
+th, td {
+  @apply py-4 px-6;
+}
+
+th {
+  @apply font-semibold bg-muted;
+}
+
+/* Better spacing for mobile */
 @media (max-width: 768px) {
   .mobile-hide {
     display: none;
+  }
+  
+  body {
+    font-size: 18px;
+  }
+  
+  button {
+    @apply min-h-14;
+    min-width: 140px;
+  }
+  
+  input, select, textarea {
+    @apply min-h-14 text-lg;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: 220 15% 60%;
+    --input: 220 15% 60%;
+  }
+  
+  .dark {
+    --border: 210 10% 40%;
+    --input: 210 10% 40%;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

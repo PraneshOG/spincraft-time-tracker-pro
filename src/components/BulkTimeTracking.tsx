@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -207,65 +206,67 @@ const BulkTimeTracking = () => {
   };
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Bulk Time Tracking</h1>
-          <p className="text-muted-foreground">Log hours for all employees at once</p>
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-6">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
+          <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
         
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <Calendar className="w-6 h-6" />
               Select Date
             </CardTitle>
-            <div className="flex gap-4 items-center">
-              <Label htmlFor="date">Date:</Label>
-              <Input
-                id="date"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-auto"
-              />
-              <Button onClick={handleSaveAll} className="ml-auto">
-                <Save className="w-4 h-4 mr-2" />
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="date" className="text-base font-medium">Date:</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <Button onClick={handleSaveAll} size="lg" className="ml-auto">
+                <Save className="w-5 h-5 mr-2" />
                 Save All
               </Button>
             </div>
           </CardHeader>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <DollarSign className="w-6 h-6" />
               Salary Calculation
             </CardTitle>
-            <div className="flex gap-4 items-center flex-wrap">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="salary-start-date">From:</Label>
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-start-date" className="text-base font-medium">From:</Label>
                 <Input
                   id="salary-start-date"
                   type="date"
                   value={salaryStartDate}
                   onChange={(e) => setSalaryStartDate(e.target.value)}
-                  className="w-auto"
+                  className="w-auto min-w-48 text-base"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="salary-end-date">To:</Label>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-end-date" className="text-base font-medium">To:</Label>
                 <Input
                   id="salary-end-date"
                   type="date"
                   value={salaryEndDate}
                   onChange={(e) => setSalaryEndDate(e.target.value)}
-                  className="w-auto"
+                  className="w-auto min-w-48 text-base"
                 />
               </div>
-              <Button onClick={handleCalculateSalary} variant="outline">
-                <Calculator className="w-4 h-4 mr-2" />
+              <Button onClick={handleCalculateSalary} variant="outline" size="lg">
+                <Calculator className="w-5 h-5 mr-2" />
                 Calculate Salary
               </Button>
             </div>
@@ -273,10 +274,10 @@ const BulkTimeTracking = () => {
         </Card>
 
         {showSalaryResults && salaryResults.length > 0 && (
-          <Card className="border-2 border-green-200 bg-green-50/50">
-            <CardHeader>
-              <CardTitle className="text-green-800">💰 Salary Calculation Results</CardTitle>
-              <p className="text-muted-foreground">
+          <Card className="border-4 border-green-300 bg-green-50/70">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-green-800 text-2xl">💰 Salary Calculation Results</CardTitle>
+              <p className="text-muted-foreground text-lg">
                 Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
               </p>
             </CardHeader>
@@ -285,31 +286,31 @@ const BulkTimeTracking = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="font-semibold">Employee Name</TableHead>
-                      <TableHead className="font-semibold">Total Hours</TableHead>
-                      <TableHead className="font-semibold">Hourly Rate</TableHead>
-                      <TableHead className="font-semibold">Total Salary</TableHead>
+                      <TableHead className="font-bold text-base">Employee Name</TableHead>
+                      <TableHead className="font-bold text-base">Total Hours</TableHead>
+                      <TableHead className="font-bold text-base">Hourly Rate</TableHead>
+                      <TableHead className="font-bold text-base">Total Salary</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {salaryResults.map((result, index) => (
                       <TableRow key={index} className="hover:bg-green-100/50">
-                        <TableCell className="font-medium">{result.employee_name}</TableCell>
-                        <TableCell className="text-center">{result.total_hours} hours</TableCell>
-                        <TableCell className="text-center">₹{result.hourly_rate}</TableCell>
+                        <TableCell className="font-medium text-base">{result.employee_name}</TableCell>
+                        <TableCell className="text-center text-base">{result.total_hours} hours</TableCell>
+                        <TableCell className="text-center text-base">₹{result.hourly_rate}</TableCell>
                         <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <div className="mt-6 p-4 bg-green-100 border border-green-300 rounded-lg">
+                <div className="mt-8 p-6 bg-green-100 border-2 border-green-400 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-green-800">Grand Total Amount:</span>
-                    <span className="text-2xl font-bold text-green-800">
+                    <span className="text-xl font-semibold text-green-800">Grand Total Amount:</span>
+                    <span className="text-3xl font-bold text-green-800">
                       ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
                     </span>
                   </div>
-                  <div className="text-sm text-green-600 mt-2">
+                  <div className="text-base text-green-600 mt-3">
                     Total employees: {salaryResults.length} | Total hours: {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
                   </div>
                 </div>
@@ -318,20 +319,20 @@ const BulkTimeTracking = () => {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Employee Hours for {formatDate(selectedDate)}</CardTitle>
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl">Employee Hours for {formatDate(selectedDate)}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Hourly Rate</TableHead>
-                    <TableHead>Total Pay</TableHead>
+                    <TableHead className="font-bold text-base">Employee</TableHead>
+                    <TableHead className="font-bold text-base">Hours</TableHead>
+                    <TableHead className="font-bold text-base">Status</TableHead>
+                    <TableHead className="font-bold text-base">Hourly Rate</TableHead>
+                    <TableHead className="font-bold text-base">Total Pay</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -341,8 +342,8 @@ const BulkTimeTracking = () => {
                     const totalPay = hours * (employee.salary_per_hour || 0);
                     
                     return (
-                      <TableRow key={employee.id}>
-                        <TableCell className="font-medium">{employee.name}</TableCell>
+                      <TableRow key={employee.id} className="hover:bg-accent/50">
+                        <TableCell className="font-medium text-base">{employee.name}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -351,7 +352,7 @@ const BulkTimeTracking = () => {
                             max="24"
                             value={hours}
                             onChange={(e) => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
-                            className="w-20"
+                            className="w-24 text-base"
                           />
                         </TableCell>
                         <TableCell>
@@ -359,7 +360,7 @@ const BulkTimeTracking = () => {
                             value={status}
                             onValueChange={(value: any) => updateEmployeeStatus(employee.id, value)}
                           >
-                            <SelectTrigger className="w-28">
+                            <SelectTrigger className="w-36 text-base">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -370,8 +371,8 @@ const BulkTimeTracking = () => {
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>₹{employee.salary_per_hour}</TableCell>
-                        <TableCell className="font-semibold">₹{totalPay.toFixed(2)}</TableCell>
+                        <TableCell className="text-base">₹{employee.salary_per_hour}</TableCell>
+                        <TableCell className="font-semibold text-base">₹{totalPay.toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })}
