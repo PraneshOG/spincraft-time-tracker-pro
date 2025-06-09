@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Save, Calendar, Calculator } from 'lucide-react';
+import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +21,12 @@ const BulkTimeTracking = () => {
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
+  
+  // New state for salary calculation date range
+  const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryResults, setSalaryResults] = useState<any[]>([]);
+  const [showSalaryResults, setShowSalaryResults] = useState(false);
 
   useEffect(() => {
     // Initialize employee hours state
@@ -104,15 +111,31 @@ const BulkTimeTracking = () => {
 
   const handleCalculateSalary = async () => {
     try {
-      const today = new Date();
-      const endDate = today.toISOString().split('T')[0];
-      const startDate = new Date(today.getTime() - (15 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
-      
-      const calculations = await calculateSalaryForPeriod(startDate, endDate);
+      if (!salaryStartDate || !salaryEndDate) {
+        toast({
+          title: "Missing Dates",
+          description: "Please select both start and end dates for salary calculation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
+        toast({
+          title: "Invalid Date Range",
+          description: "Start date must be before or equal to end date.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const calculations = await calculateSalaryForPeriod(salaryStartDate, salaryEndDate);
+      setSalaryResults(calculations);
+      setShowSalaryResults(true);
       
       toast({
         title: "Salary Calculated",
-        description: `Calculated salary for ${calculations.length} employees for the last 15 days.`,
+        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
       });
     } catch (error) {
       toast({
@@ -168,13 +191,90 @@ const BulkTimeTracking = () => {
                 <Save className="w-4 h-4 mr-2" />
                 Save All
               </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Salary Calculation
+            </CardTitle>
+            <div className="flex gap-4 items-center flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="salary-start-date">From:</Label>
+                <Input
+                  id="salary-start-date"
+                  type="date"
+                  value={salaryStartDate}
+                  onChange={(e) => setSalaryStartDate(e.target.value)}
+                  className="w-auto"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="salary-end-date">To:</Label>
+                <Input
+                  id="salary-end-date"
+                  type="date"
+                  value={salaryEndDate}
+                  onChange={(e) => setSalaryEndDate(e.target.value)}
+                  className="w-auto"
+                />
+              </div>
               <Button onClick={handleCalculateSalary} variant="outline">
                 <Calculator className="w-4 h-4 mr-2" />
-                Calculate 15-Day Salary
+                Calculate Salary
               </Button>
             </div>
           </CardHeader>
         </Card>
+
+        {showSalaryResults && salaryResults.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Salary Calculation Results</CardTitle>
+              <p className="text-muted-foreground">
+                Period: {formatDate(salaryStartDate)} to {formatDate(salaryEndDate)}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Total Hours</TableHead>
+                      <TableHead>Hourly Rate</TableHead>
+                      <TableHead>Total Salary</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {salaryResults.map((result, index) => {
+                      const employee = employees.find(emp => emp.id === result.employee_id);
+                      return (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{employee?.name || 'Unknown Employee'}</TableCell>
+                          <TableCell>{result.total_hours} hours</TableCell>
+                          <TableCell>₹{result.hourly_rate}</TableCell>
+                          <TableCell className="font-semibold text-green-600">₹{result.total_salary.toFixed(2)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                <div className="mt-4 p-4 bg-muted rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">Total Amount:</span>
+                    <span className="text-lg font-bold text-green-600">
+                      ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
