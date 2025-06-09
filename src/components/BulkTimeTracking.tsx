@@ -129,7 +129,47 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      const calculations = await calculateSalaryForPeriod(salaryStartDate, salaryEndDate);
+      // Fetch work logs for the selected period
+      const { data: workLogs, error } = await supabase
+        .from('work_logs')
+        .select(`
+          *,
+          employees (
+            id,
+            name,
+            salary_per_hour
+          )
+        `)
+        .gte('date', salaryStartDate)
+        .lte('date', salaryEndDate)
+        .eq('status', 'present');
+
+      if (error) throw error;
+
+      // Group by employee and calculate totals
+      const employeeTotals = workLogs?.reduce((acc: any, log: any) => {
+        const empId = log.employee_id;
+        if (!acc[empId]) {
+          acc[empId] = {
+            employee_id: empId,
+            employee_name: log.employees?.name || 'Unknown',
+            total_hours: 0,
+            hourly_rate: log.employees?.salary_per_hour || 0
+          };
+        }
+        acc[empId].total_hours += log.total_hours;
+        return acc;
+      }, {});
+
+      // Create salary calculation results
+      const calculations = Object.values(employeeTotals || {}).map((emp: any) => ({
+        employee_id: emp.employee_id,
+        employee_name: emp.employee_name,
+        total_hours: emp.total_hours,
+        hourly_rate: emp.hourly_rate,
+        total_salary: emp.total_hours * emp.hourly_rate
+      }));
+
       setSalaryResults(calculations);
       setShowSalaryResults(true);
       
@@ -138,6 +178,7 @@ const BulkTimeTracking = () => {
         description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
       });
     } catch (error) {
+      console.error('Error calculating salary:', error);
       toast({
         title: "Error",
         description: "Failed to calculate salary",
@@ -231,11 +272,11 @@ const BulkTimeTracking = () => {
         </Card>
 
         {showSalaryResults && salaryResults.length > 0 && (
-          <Card>
+          <Card className="border-2 border-green-200 bg-green-50/50">
             <CardHeader>
-              <CardTitle>Salary Calculation Results</CardTitle>
+              <CardTitle className="text-green-800">💰 Salary Calculation Results</CardTitle>
               <p className="text-muted-foreground">
-                Period: {formatDate(salaryStartDate)} to {formatDate(salaryEndDate)}
+                Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
               </p>
             </CardHeader>
             <CardContent>
@@ -243,32 +284,32 @@ const BulkTimeTracking = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Total Hours</TableHead>
-                      <TableHead>Hourly Rate</TableHead>
-                      <TableHead>Total Salary</TableHead>
+                      <TableHead className="font-semibold">Employee Name</TableHead>
+                      <TableHead className="font-semibold">Total Hours</TableHead>
+                      <TableHead className="font-semibold">Hourly Rate</TableHead>
+                      <TableHead className="font-semibold">Total Salary</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {salaryResults.map((result, index) => {
-                      const employee = employees.find(emp => emp.id === result.employee_id);
-                      return (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{employee?.name || 'Unknown Employee'}</TableCell>
-                          <TableCell>{result.total_hours} hours</TableCell>
-                          <TableCell>₹{result.hourly_rate}</TableCell>
-                          <TableCell className="font-semibold text-green-600">₹{result.total_salary.toFixed(2)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {salaryResults.map((result, index) => (
+                      <TableRow key={index} className="hover:bg-green-100/50">
+                        <TableCell className="font-medium">{result.employee_name}</TableCell>
+                        <TableCell className="text-center">{result.total_hours} hours</TableCell>
+                        <TableCell className="text-center">₹{result.hourly_rate}</TableCell>
+                        <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
-                <div className="mt-4 p-4 bg-muted rounded-lg">
+                <div className="mt-6 p-4 bg-green-100 border border-green-300 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold">Total Amount:</span>
-                    <span className="text-lg font-bold text-green-600">
+                    <span className="text-lg font-semibold text-green-800">Grand Total Amount:</span>
+                    <span className="text-2xl font-bold text-green-800">
                       ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
                     </span>
+                  </div>
+                  <div className="text-sm text-green-600 mt-2">
+                    Total employees: {salaryResults.length} | Total hours: {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
                   </div>
                 </div>
               </div>
