@@ -36,20 +36,21 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Refresh data whenever filters change
+  // Load all work logs initially and when date/employee filter changes
   useEffect(() => {
+    console.log('Fetching work logs for date:', selectedDate, 'employee:', selectedEmployee);
     const filters: any = {};
     
     if (selectedEmployee !== 'all') {
       filters.employeeId = selectedEmployee;
     }
     
+    // Always apply date filter when a specific date is selected
     if (selectedDate) {
       filters.startDate = selectedDate;
       filters.endDate = selectedDate;
     }
 
-    console.log('Fetching work logs with filters:', filters);
     fetchWorkLogs(filters);
   }, [selectedEmployee, selectedDate, fetchWorkLogs]);
 
@@ -201,10 +202,22 @@ const TimeTracking = () => {
     }
   };
 
-  const filteredLogs = workLogs.filter(log => 
-    !searchTerm || 
-    log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter logs based on search term and selected filters
+  const filteredLogs = workLogs.filter(log => {
+    const matchesSearch = !searchTerm || 
+      log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesDate = !selectedDate || log.date === selectedDate;
+    
+    const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
+    
+    return matchesSearch && matchesDate && matchesEmployee;
+  });
+
+  console.log('All work logs:', workLogs);
+  console.log('Filtered logs:', filteredLogs);
+  console.log('Selected date:', selectedDate);
+  console.log('Selected employee:', selectedEmployee);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -388,7 +401,7 @@ const TimeTracking = () => {
             {filteredLogs.length > 0 ? (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Showing work logs for {new Date(selectedDate).toLocaleDateString()} 
+                  Showing {filteredLogs.length} work log(s) for {new Date(selectedDate).toLocaleDateString()} 
                   {selectedEmployee !== 'all' && employees.find(emp => emp.id === selectedEmployee) && 
                     ` - ${employees.find(emp => emp.id === selectedEmployee)?.name}`
                   }
