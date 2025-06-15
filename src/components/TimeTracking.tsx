@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Search, Save, X, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Save, X, Clock, RotateCcw } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -345,7 +344,6 @@ const TimeTracking = () => {
                   </Badge>
                 </div>
 
-                {/* Inline Edit Form */}
                 {inlineEditingId === log.id ? (
                   <div className="space-y-3 bg-accent/20 p-3 rounded-md">
                     <div className="grid grid-cols-2 gap-3">
@@ -419,7 +417,6 @@ const TimeTracking = () => {
                     </div>
                   </div>
                 ) : (
-                  /* Display Mode */
                   <div className="space-y-2">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1">
@@ -434,13 +431,13 @@ const TimeTracking = () => {
                     )}
                     <div className="flex gap-2">
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleInlineEdit(log)}
                         className="flex-1"
                       >
-                        <Edit className="w-4 h-4 mr-1" />
-                        Quick Edit
+                        <RotateCcw className="w-4 h-4 mr-1" />
+                        Change
                       </Button>
                       <Button
                         variant="outline"
