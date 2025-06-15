@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Save, X, Clock } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,6 +25,8 @@ const TimeTracking = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<any>(null);
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
+  const [inlineEditData, setInlineEditData] = useState<any>({});
 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -94,6 +97,42 @@ const TimeTracking = () => {
       notes: log.notes || '',
     });
     setIsDialogOpen(true);
+  };
+
+  const handleInlineEdit = (log: any) => {
+    setInlineEditingId(log.id);
+    setInlineEditData({
+      total_hours: log.total_hours,
+      status: log.status,
+      notes: log.notes || '',
+    });
+  };
+
+  const handleInlineCancel = () => {
+    setInlineEditingId(null);
+    setInlineEditData({});
+  };
+
+  const handleInlineSave = async (log: any) => {
+    try {
+      await updateWorkLog(log.id, {
+        ...inlineEditData,
+        updated_at: new Date().toISOString(),
+      });
+      await addAdminLog('UPDATE_WORKLOG', `Updated work log for ${log.employees?.name} on ${log.date} (inline edit)`, admin?.id || 'admin');
+      toast({
+        title: "Updated",
+        description: "Work log updated successfully.",
+      });
+      setInlineEditingId(null);
+      setInlineEditData({});
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update work log",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDelete = async (log: any) => {
@@ -293,41 +332,154 @@ const TimeTracking = () => {
         <CardContent>
           <div className="space-y-4">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="border rounded-lg p-4 space-y-2">
+              <div key={log.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium">{log.employees?.name}</h3>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-lg">{log.employees?.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(log.date).toLocaleDateString()} • {log.total_hours}h
+                      {new Date(log.date).toLocaleDateString()}
                     </p>
-                    {log.notes && (
-                      <p className="text-sm text-muted-foreground mt-1">{log.notes}</p>
-                    )}
                   </div>
                   <Badge className={`${getStatusColor(log.status)} text-white`}>
                     {log.status}
                   </Badge>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(log)}
-                    className="flex-1"
-                  >
-                    <Edit className="w-4 h-4 mr-1" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(log)}
-                    className="flex-1"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
-                </div>
+
+                {/* Inline Edit Form */}
+                {inlineEditingId === log.id ? (
+                  <div className="space-y-3 bg-accent/20 p-3 rounded-md">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-sm">Hours</Label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="24"
+                          value={inlineEditData.total_hours}
+                          onChange={(e) => setInlineEditData(prev => ({ 
+                            ...prev, 
+                            total_hours: parseFloat(e.target.value) || 0 
+                          }))}
+                          className="h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm">Status</Label>
+                        <Select
+                          value={inlineEditData.status}
+                          onValueChange={(value) => setInlineEditData(prev => ({ 
+                            ...prev, 
+                            status: value 
+                          }))}
+                        >
+                          <SelectTrigger className="h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="present">Present</SelectItem>
+                            <SelectItem value="absent">Absent</SelectItem>
+                            <SelectItem value="overtime">Overtime</SelectItem>
+                            <SelectItem value="holiday">Holiday</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm">Notes</Label>
+                      <Textarea
+                        value={inlineEditData.notes}
+                        onChange={(e) => setInlineEditData(prev => ({ 
+                          ...prev, 
+                          notes: e.target.value 
+                        }))}
+                        placeholder="Additional notes..."
+                        rows={2}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleInlineSave(log)}
+                        className="flex-1"
+                      >
+                        <Save className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleInlineCancel}
+                        className="flex-1"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Display Mode */
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium">{log.total_hours}h</span>
+                      </div>
+                    </div>
+                    {log.notes && (
+                      <div className="bg-muted/50 p-2 rounded text-sm">
+                        <strong>Notes:</strong> {log.notes}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleInlineEdit(log)}
+                        className="flex-1"
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        Quick Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(log)}
+                        className="flex-1"
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        Full Edit
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Work Log</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this work log for {log.employees?.name} on {new Date(log.date).toLocaleDateString()}? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(log)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {filteredLogs.length === 0 && (
