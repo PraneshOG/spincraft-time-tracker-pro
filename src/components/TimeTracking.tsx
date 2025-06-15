@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,28 +35,40 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Load all work logs initially and when date/employee filter changes
+  // Load work logs when component mounts and when filters change
   useEffect(() => {
-    console.log('Fetching work logs for date:', selectedDate, 'employee:', selectedEmployee);
-    const filters: any = {};
+    console.log('=== FETCHING WORK LOGS ===');
+    console.log('Selected date:', selectedDate);
+    console.log('Selected employee:', selectedEmployee);
     
-    if (selectedEmployee !== 'all') {
-      filters.employeeId = selectedEmployee;
-    }
-    
-    // Always apply date filter when a specific date is selected
-    if (selectedDate) {
-      filters.startDate = selectedDate;
-      filters.endDate = selectedDate;
-    }
-
-    fetchWorkLogs(filters);
+    // For debugging, let's fetch ALL work logs first to see what we have
+    fetchWorkLogs({});
   }, [selectedEmployee, selectedDate, fetchWorkLogs]);
+
+  // Separate effect to log what we received
+  useEffect(() => {
+    console.log('=== WORK LOGS RECEIVED ===');
+    console.log('Total work logs count:', workLogs.length);
+    console.log('All work logs:', workLogs);
+    
+    workLogs.forEach((log, index) => {
+      console.log(`Log ${index + 1}:`, {
+        id: log.id,
+        date: log.date,
+        employee_name: log.employees?.name,
+        total_hours: log.total_hours,
+        status: log.status
+      });
+    });
+  }, [workLogs]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
+      console.log('=== SUBMITTING WORK LOG ===');
+      console.log('Form data:', formData);
+      
       const logData = {
         ...formData,
         created_by: admin?.id || 'admin',
@@ -71,6 +82,7 @@ const TimeTracking = () => {
           description: "Work log has been successfully updated.",
         });
       } else {
+        console.log('Adding new work log with data:', logData);
         await addWorkLog(logData);
         const employee = employees.find(emp => emp.id === formData.employee_id);
         await addAdminLog('ADD_WORKLOG', `Added work log for ${employee?.name} on ${formData.date}`, admin?.id || 'admin');
@@ -90,16 +102,9 @@ const TimeTracking = () => {
       setEditingLog(null);
       setIsDialogOpen(false);
       
-      // Refresh the data after successful update
-      const filters: any = {};
-      if (selectedEmployee !== 'all') {
-        filters.employeeId = selectedEmployee;
-      }
-      if (selectedDate) {
-        filters.startDate = selectedDate;
-        filters.endDate = selectedDate;
-      }
-      await fetchWorkLogs(filters);
+      // Refresh data by fetching all logs again
+      console.log('Refreshing work logs after submit...');
+      await fetchWorkLogs({});
     } catch (error) {
       console.error('Error saving work log:', error);
       toast({
@@ -153,16 +158,8 @@ const TimeTracking = () => {
       setInlineEditingId(null);
       setInlineEditData({});
       
-      // Refresh the data after successful inline update
-      const filters: any = {};
-      if (selectedEmployee !== 'all') {
-        filters.employeeId = selectedEmployee;
-      }
-      if (selectedDate) {
-        filters.startDate = selectedDate;
-        filters.endDate = selectedDate;
-      }
-      await fetchWorkLogs(filters);
+      // Refresh data
+      await fetchWorkLogs({});
     } catch (error) {
       console.error('Error updating work log:', error);
       toast({
@@ -182,16 +179,8 @@ const TimeTracking = () => {
         description: "Work log has been successfully deleted.",
       });
       
-      // Refresh the data after successful deletion
-      const filters: any = {};
-      if (selectedEmployee !== 'all') {
-        filters.employeeId = selectedEmployee;
-      }
-      if (selectedDate) {
-        filters.startDate = selectedDate;
-        filters.endDate = selectedDate;
-      }
-      await fetchWorkLogs(filters);
+      // Refresh data
+      await fetchWorkLogs({});
     } catch (error) {
       console.error('Error deleting work log:', error);
       toast({
@@ -202,22 +191,32 @@ const TimeTracking = () => {
     }
   };
 
-  // Filter logs based on search term and selected filters
+  // Filter logs - for now, let's show ALL logs to see if any exist
   const filteredLogs = workLogs.filter(log => {
     const matchesSearch = !searchTerm || 
       log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesDate = !selectedDate || log.date === selectedDate;
+    // Temporarily disable date filtering to see all logs
+    // const matchesDate = !selectedDate || log.date === selectedDate;
+    const matchesDate = true; // Show all dates for debugging
     
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
+    
+    console.log(`Filtering log ${log.id}:`, {
+      matchesSearch,
+      matchesDate, 
+      matchesEmployee,
+      logDate: log.date,
+      selectedDate,
+      employeeName: log.employees?.name
+    });
     
     return matchesSearch && matchesDate && matchesEmployee;
   });
 
-  console.log('All work logs:', workLogs);
+  console.log('=== FILTERED RESULTS ===');
+  console.log('Filtered logs count:', filteredLogs.length);
   console.log('Filtered logs:', filteredLogs);
-  console.log('Selected date:', selectedDate);
-  console.log('Selected employee:', selectedEmployee);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -358,7 +357,7 @@ const TimeTracking = () => {
       <Card>
         <CardHeader>
           <CardTitle>Work Logs</CardTitle>
-          <CardDescription>Select a date to view and edit work logs for that specific day</CardDescription>
+          <CardDescription>All work logs (debugging mode - showing all dates)</CardDescription>
           
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
@@ -398,21 +397,26 @@ const TimeTracking = () => {
         
         <CardContent>
           <div className="space-y-4">
+            <div className="bg-yellow-100 p-3 rounded border">
+              <p className="text-sm"><strong>Debug Info:</strong></p>
+              <p>Total work logs: {workLogs.length}</p>
+              <p>Filtered logs: {filteredLogs.length}</p>
+              <p>Selected date: {selectedDate}</p>
+              <p>Employees count: {employees.length}</p>
+            </div>
+            
             {filteredLogs.length > 0 ? (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Showing {filteredLogs.length} work log(s) for {new Date(selectedDate).toLocaleDateString()} 
-                  {selectedEmployee !== 'all' && employees.find(emp => emp.id === selectedEmployee) && 
-                    ` - ${employees.find(emp => emp.id === selectedEmployee)?.name}`
-                  }
+                  Showing {filteredLogs.length} work log(s) (all dates for debugging)
                 </div>
                 {filteredLogs.map((log) => (
-                  <div key={log.id} className="border rounded-lg p-4 space-y-3">
+                  <div key={log.id} className="border rounded-lg p-4 space-y-3 bg-blue-50">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="font-medium text-lg">{log.employees?.name}</h3>
+                        <h3 className="font-medium text-lg">{log.employees?.name || 'Unknown Employee'}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {new Date(log.date).toLocaleDateString()}
+                          Date: {log.date} | Hours: {log.total_hours}h
                         </p>
                       </div>
                       <Badge className={`${getStatusColor(log.status)} text-white`}>
@@ -557,8 +561,8 @@ const TimeTracking = () => {
               </>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No work logs found for {new Date(selectedDate).toLocaleDateString()}</p>
-                <p className="text-sm mt-2">Select a different date or add a new work log</p>
+                <p>No work logs found</p>
+                <p className="text-sm mt-2">Try adding a work log using the button above</p>
               </div>
             )}
           </div>
