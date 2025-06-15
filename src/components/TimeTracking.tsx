@@ -122,6 +122,7 @@ const TimeTracking = () => {
   };
 
   const handleInlineEdit = (log: any) => {
+    console.log('Starting inline edit for log:', log.id);
     setInlineEditingId(log.id);
     setInlineEditData({
       total_hours: log.total_hours,
@@ -131,6 +132,7 @@ const TimeTracking = () => {
   };
 
   const handleInlineCancel = () => {
+    console.log('Cancelling inline edit');
     setInlineEditingId(null);
     setInlineEditData({});
   };
@@ -490,21 +492,20 @@ const TimeTracking = () => {
                             <strong>Notes:</strong> {log.notes}
                           </div>
                         )}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 pt-2">
                           <Button
-                            variant="default"
                             size="sm"
                             onClick={() => handleInlineEdit(log)}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold border-2 border-blue-800"
+                            className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md border-2 border-orange-800 shadow-lg"
                           >
-                            <RotateCcw className="w-4 h-4 mr-1" />
-                            Change
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            CHANGE
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(log)}
-                            className="flex-1 border-2"
+                            className="flex-1 border-2 hover:bg-gray-50"
                           >
                             <Edit className="w-4 h-4 mr-1" />
                             Full Edit
@@ -514,7 +515,7 @@ const TimeTracking = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="flex-1 border-2"
+                                className="flex-1 border-2 hover:bg-red-50 hover:border-red-300"
                               >
                                 <Trash2 className="w-4 h-4 mr-1" />
                                 Delete
