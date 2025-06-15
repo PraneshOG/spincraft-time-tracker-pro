@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,11 +36,21 @@ const TimeTracking = () => {
     notes: '',
   });
 
+  // Refresh data whenever filters change
   useEffect(() => {
-    fetchWorkLogs({
-      employeeId: selectedEmployee === 'all' ? undefined : selectedEmployee,
-      startDate: selectedDate ? selectedDate : undefined,
-    });
+    const filters: any = {};
+    
+    if (selectedEmployee !== 'all') {
+      filters.employeeId = selectedEmployee;
+    }
+    
+    if (selectedDate) {
+      filters.startDate = selectedDate;
+      filters.endDate = selectedDate;
+    }
+
+    console.log('Fetching work logs with filters:', filters);
+    fetchWorkLogs(filters);
   }, [selectedEmployee, selectedDate, fetchWorkLogs]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,7 +88,19 @@ const TimeTracking = () => {
       });
       setEditingLog(null);
       setIsDialogOpen(false);
+      
+      // Refresh the data after successful update
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
+      console.error('Error saving work log:', error);
       toast({
         title: "Error",
         description: "Failed to save work log",
@@ -114,6 +137,7 @@ const TimeTracking = () => {
 
   const handleInlineSave = async (log: any) => {
     try {
+      console.log('Updating work log with data:', inlineEditData);
       await updateWorkLog(log.id, {
         ...inlineEditData,
         updated_at: new Date().toISOString(),
@@ -125,7 +149,19 @@ const TimeTracking = () => {
       });
       setInlineEditingId(null);
       setInlineEditData({});
+      
+      // Refresh the data after successful inline update
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
+      console.error('Error updating work log:', error);
       toast({
         title: "Error",
         description: "Failed to update work log",
@@ -142,7 +178,19 @@ const TimeTracking = () => {
         title: "Work Log Deleted",
         description: "Work log has been successfully deleted.",
       });
+      
+      // Refresh the data after successful deletion
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
+      console.error('Error deleting work log:', error);
       toast({
         title: "Error",
         description: "Failed to delete work log",
@@ -171,7 +219,7 @@ const TimeTracking = () => {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold">Time Tracking</h1>
-          <p className="text-muted-foreground">Track employee working hours</p>
+          <p className="text-muted-foreground">Track employee working hours - select any date to view and edit logs</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -295,6 +343,7 @@ const TimeTracking = () => {
       <Card>
         <CardHeader>
           <CardTitle>Work Logs</CardTitle>
+          <CardDescription>Select a date to view and edit work logs for that specific day</CardDescription>
           
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
@@ -320,168 +369,182 @@ const TimeTracking = () => {
               </SelectContent>
             </Select>
             
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
+            <div className="space-y-1">
+              <Label htmlFor="dateFilter">Select Date to View/Edit</Label>
+              <Input
+                id="dateFilter"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+            </div>
           </div>
         </CardHeader>
         
         <CardContent>
           <div className="space-y-4">
-            {filteredLogs.map((log) => (
-              <div key={log.id} className="border rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-lg">{log.employees?.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(log.date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <Badge className={`${getStatusColor(log.status)} text-white`}>
-                    {log.status}
-                  </Badge>
+            {filteredLogs.length > 0 ? (
+              <>
+                <div className="text-sm text-muted-foreground mb-4">
+                  Showing work logs for {new Date(selectedDate).toLocaleDateString()} 
+                  {selectedEmployee !== 'all' && employees.find(emp => emp.id === selectedEmployee) && 
+                    ` - ${employees.find(emp => emp.id === selectedEmployee)?.name}`
+                  }
                 </div>
+                {filteredLogs.map((log) => (
+                  <div key={log.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-lg">{log.employees?.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(log.date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge className={`${getStatusColor(log.status)} text-white`}>
+                        {log.status}
+                      </Badge>
+                    </div>
 
-                {inlineEditingId === log.id ? (
-                  <div className="space-y-3 bg-accent/20 p-3 rounded-md">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-sm">Hours</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          max="24"
-                          value={inlineEditData.total_hours}
-                          onChange={(e) => setInlineEditData(prev => ({ 
-                            ...prev, 
-                            total_hours: parseFloat(e.target.value) || 0 
-                          }))}
-                          className="h-10"
-                        />
+                    {inlineEditingId === log.id ? (
+                      <div className="space-y-3 bg-accent/20 p-3 rounded-md">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-sm">Hours</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              max="24"
+                              value={inlineEditData.total_hours}
+                              onChange={(e) => setInlineEditData(prev => ({ 
+                                ...prev, 
+                                total_hours: parseFloat(e.target.value) || 0 
+                              }))}
+                              className="h-10"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Status</Label>
+                            <Select
+                              value={inlineEditData.status}
+                              onValueChange={(value) => setInlineEditData(prev => ({ 
+                                ...prev, 
+                                status: value 
+                              }))}
+                            >
+                              <SelectTrigger className="h-10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="present">Present</SelectItem>
+                                <SelectItem value="absent">Absent</SelectItem>
+                                <SelectItem value="overtime">Overtime</SelectItem>
+                                <SelectItem value="holiday">Holiday</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm">Notes</Label>
+                          <Textarea
+                            value={inlineEditData.notes}
+                            onChange={(e) => setInlineEditData(prev => ({ 
+                              ...prev, 
+                              notes: e.target.value 
+                            }))}
+                            placeholder="Additional notes..."
+                            rows={2}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleInlineSave(log)}
+                            className="flex-1"
+                          >
+                            <Save className="w-4 h-4 mr-1" />
+                            Save Changes
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleInlineCancel}
+                            className="flex-1"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-sm">Status</Label>
-                        <Select
-                          value={inlineEditData.status}
-                          onValueChange={(value) => setInlineEditData(prev => ({ 
-                            ...prev, 
-                            status: value 
-                          }))}
-                        >
-                          <SelectTrigger className="h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="present">Present</SelectItem>
-                            <SelectItem value="absent">Absent</SelectItem>
-                            <SelectItem value="overtime">Overtime</SelectItem>
-                            <SelectItem value="holiday">Holiday</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm">Notes</Label>
-                      <Textarea
-                        value={inlineEditData.notes}
-                        onChange={(e) => setInlineEditData(prev => ({ 
-                          ...prev, 
-                          notes: e.target.value 
-                        }))}
-                        placeholder="Additional notes..."
-                        rows={2}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleInlineSave(log)}
-                        className="flex-1"
-                      >
-                        <Save className="w-4 h-4 mr-1" />
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleInlineCancel}
-                        className="flex-1"
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium">{log.total_hours}h</span>
-                      </div>
-                    </div>
-                    {log.notes && (
-                      <div className="bg-muted/50 p-2 rounded text-sm">
-                        <strong>Notes:</strong> {log.notes}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleInlineEdit(log)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold border-2 border-blue-800"
-                      >
-                        <RotateCcw className="w-4 h-4 mr-1" />
-                        Change
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(log)}
-                        className="flex-1 border-2"
-                      >
-                        <Edit className="w-4 h-4 mr-1" />
-                        Full Edit
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium">{log.total_hours}h</span>
+                          </div>
+                        </div>
+                        {log.notes && (
+                          <div className="bg-muted/50 p-2 rounded text-sm">
+                            <strong>Notes:</strong> {log.notes}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleInlineEdit(log)}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold border-2 border-blue-800"
+                          >
+                            <RotateCcw className="w-4 h-4 mr-1" />
+                            Change
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handleEdit(log)}
                             className="flex-1 border-2"
                           >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Delete
+                            <Edit className="w-4 h-4 mr-1" />
+                            Full Edit
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Work Log</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this work log for {log.employees?.name} on {new Date(log.date).toLocaleDateString()}? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(log)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-2"
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Work Log</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this work log for {log.employees?.name} on {new Date(log.date).toLocaleDateString()}? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(log)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
-            {filteredLogs.length === 0 && (
+                ))}
+              </>
+            ) : (
               <div className="text-center py-8 text-muted-foreground">
-                No work logs found
+                <p>No work logs found for {new Date(selectedDate).toLocaleDateString()}</p>
+                <p className="text-sm mt-2">Select a different date or add a new work log</p>
               </div>
             )}
           </div>
