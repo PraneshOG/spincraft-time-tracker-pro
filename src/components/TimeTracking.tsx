@@ -431,10 +431,10 @@ const TimeTracking = () => {
                     )}
                     <div className="flex gap-2">
                       <Button
-                        variant="secondary"
+                        variant="default"
                         size="sm"
                         onClick={() => handleInlineEdit(log)}
-                        className="flex-1"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold border-2 border-blue-800"
                       >
                         <RotateCcw className="w-4 h-4 mr-1" />
                         Change
@@ -443,7 +443,7 @@ const TimeTracking = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => handleEdit(log)}
-                        className="flex-1"
+                        className="flex-1 border-2"
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Full Edit
@@ -453,7 +453,7 @@ const TimeTracking = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex-1"
+                            className="flex-1 border-2"
                           >
                             <Trash2 className="w-4 h-4 mr-1" />
                             Delete
