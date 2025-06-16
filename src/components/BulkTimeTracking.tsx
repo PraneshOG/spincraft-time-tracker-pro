@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Save, Calendar } from 'lucide-react';
-import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
+import { Badge } from '@/components/ui/badge';
+import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
+import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -14,58 +16,48 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { addBulkWorkLogs, workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
+  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
-  const [isEditable, setIsEditable] = useState(false);
+  
+  // New state for salary calculation date range
+  const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryResults, setSalaryResults] = useState<any[]>([]);
+  const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Track if employeeHours initialized for current edit session to prevent overwriting user changes
-  const editingInitializedRef = useRef(false);
-
-  // Fetch work logs on selectedDate change
   useEffect(() => {
+    // Initialize employee hours state
+    const initialHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+    employees.forEach(emp => {
+      initialHours[emp.id] = { hours: 0, status: 'present' };
+    });
+    setEmployeeHours(initialHours);
+  }, [employees]);
+
+  useEffect(() => {
+    // Fetch existing work logs for the selected date
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-    setIsEditable(false);  // Disable editing on date change to avoid confusion
-    editingInitializedRef.current = false;  // Reset edit init flag on date change
   }, [selectedDate, fetchWorkLogs]);
 
-  // When not editing, sync employeeHours to fetched workLogs for that date
   useEffect(() => {
-    if (!isEditable) {
-      const initialValues: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
-      employees.forEach(emp => {
-        const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
-        if (log) {
-          initialValues[emp.id] = { hours: log.total_hours, status: log.status as any };
-        } else {
-          initialValues[emp.id] = { hours: 0, status: 'present' };
-        }
-      });
-      setEmployeeHours(initialValues);
-      editingInitializedRef.current = false;  // Reset init since not editing
-    }
-  }, [workLogs, employees, selectedDate, isEditable]);
-
-  // When editing enabled, initialize employeeHours once from current displayed values if not already done
-  useEffect(() => {
-    if (isEditable && !editingInitializedRef.current) {
-      // If employeeHours is empty, initialize it
-      if (Object.keys(employeeHours).length === 0) {
-        const initialVals: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
-        employees.forEach(emp => {
-          const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
-          if (log) {
-            initialVals[emp.id] = { hours: log.total_hours, status: log.status as any };
-          } else {
-            initialVals[emp.id] = { hours: 0, status: 'present' };
-          }
-        });
-        setEmployeeHours(initialVals);
+    // Update employee hours based on existing work logs
+    const updatedHours = { ...employeeHours };
+    employees.forEach(emp => {
+      const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
+      if (existingLog) {
+        updatedHours[emp.id] = {
+          hours: existingLog.total_hours,
+          status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
+        };
+      } else if (!updatedHours[emp.id]) {
+        updatedHours[emp.id] = { hours: 0, status: 'present' };
       }
-      editingInitializedRef.current = true;
-    }
-  }, [isEditable, employeeHours, employees, selectedDate, workLogs]);
+    });
+    setEmployeeHours(updatedHours);
+  }, [workLogs, selectedDate, employees]);
 
   const updateEmployeeHours = (employeeId: string, hours: number) => {
     setEmployeeHours(prev => ({
@@ -83,52 +75,113 @@ const BulkTimeTracking = () => {
 
   const handleSaveAll = async () => {
     try {
-      const existingLogsMap = new Map<string, { total_hours: number; status: string }>();
-      workLogs.forEach(log => {
-        existingLogsMap.set(log.employee_id, { total_hours: log.total_hours, status: log.status });
-      });
-
-      const workLogsToSave = employees.reduce((acc, emp) => {
-        const edited = employeeHours[emp.id];
-        if (!edited) return acc;
-
-        const existing = existingLogsMap.get(emp.id);
-        const hoursChanged = !existing || existing.total_hours !== edited.hours;
-        const statusChanged = !existing || existing.status !== edited.status;
-
-        if ((hoursChanged || statusChanged) && (edited.hours > 0 || edited.status !== 'present')) {
-          acc.push({
-            employee_id: emp.id,
-            date: selectedDate,
-            total_hours: edited.hours,
-            status: edited.status,
-            created_by: admin?.id || 'admin'
-          });
-        }
-        return acc;
-      }, [] as Array<{ employee_id: string; date: string; total_hours: number; status: string; created_by: string }>);
+      const workLogsToSave = employees
+        .filter(emp => employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present')
+        .map(emp => ({
+          employee_id: emp.id,
+          date: selectedDate,
+          total_hours: employeeHours[emp.id]?.hours || 0,
+          status: employeeHours[emp.id]?.status || 'present',
+          created_by: admin?.id || 'admin'
+        }));
 
       if (workLogsToSave.length === 0) {
         toast({
           title: "No Changes",
-          description: "No updated hours or status to save.",
+          description: "No hours or status changes to save.",
         });
         return;
       }
 
       await addBulkWorkLogs(workLogsToSave);
-      await addAdminLog('BULK_TIME_TRACKING', `Added/Updated time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
-
+      await addAdminLog('BULK_TIME_TRACKING', `Added time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
+      
       toast({
         title: "Time Logs Saved",
         description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
       });
-      setIsEditable(false);
-      editingInitializedRef.current = false;
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to save time logs",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCalculateSalary = async () => {
+    try {
+      if (!salaryStartDate || !salaryEndDate) {
+        toast({
+          title: "Missing Dates",
+          description: "Please select both start and end dates for salary calculation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
+        toast({
+          title: "Invalid Date Range",
+          description: "Start date must be before or equal to end date.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Fetch work logs for the selected period
+      const { data: workLogs, error } = await supabase
+        .from('work_logs')
+        .select(`
+          *,
+          employees (
+            id,
+            name,
+            salary_per_hour
+          )
+        `)
+        .gte('date', salaryStartDate)
+        .lte('date', salaryEndDate)
+        .eq('status', 'present');
+
+      if (error) throw error;
+
+      // Group by employee and calculate totals
+      const employeeTotals = workLogs?.reduce((acc: any, log: any) => {
+        const empId = log.employee_id;
+        if (!acc[empId]) {
+          acc[empId] = {
+            employee_id: empId,
+            employee_name: log.employees?.name || 'Unknown',
+            total_hours: 0,
+            hourly_rate: log.employees?.salary_per_hour || 0
+          };
+        }
+        acc[empId].total_hours += log.total_hours;
+        return acc;
+      }, {});
+
+      // Create salary calculation results
+      const calculations = Object.values(employeeTotals || {}).map((emp: any) => ({
+        employee_id: emp.employee_id,
+        employee_name: emp.employee_name,
+        total_hours: emp.total_hours,
+        hourly_rate: emp.hourly_rate,
+        total_salary: emp.total_hours * emp.hourly_rate
+      }));
+
+      setSalaryResults(calculations);
+      setShowSalaryResults(true);
+      
+      toast({
+        title: "Salary Calculated",
+        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
+      });
+    } catch (error) {
+      console.error('Error calculating salary:', error);
+      toast({
+        title: "Error",
+        description: "Failed to calculate salary",
         variant: "destructive",
       });
     }
@@ -142,6 +195,16 @@ const BulkTimeTracking = () => {
     });
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'present': return 'bg-green-500';
+      case 'absent': return 'bg-red-500';
+      case 'overtime': return 'bg-orange-500';
+      case 'holiday': return 'bg-blue-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-6">
@@ -149,39 +212,112 @@ const BulkTimeTracking = () => {
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
           <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
-
+        
         <Card className="border-2">
-          <CardHeader className="pb-4 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-3">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
               <Calendar className="w-6 h-6" />
-              <Label htmlFor="date" className="text-base font-medium">Date:</Label>
-              <Input
-                id="date"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-auto min-w-48 text-base"
-                disabled={isEditable === false}
-              />
+              Select Date
+            </CardTitle>
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="date" className="text-base font-medium">Date:</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <Button onClick={handleSaveAll} size="lg" className="ml-auto">
+                <Save className="w-5 h-5 mr-2" />
+                Save All
+              </Button>
             </div>
-            <Button 
-              onClick={() => setIsEditable(prev => !prev)} 
-              variant={isEditable ? 'outline' : 'default'} 
-              size="lg" 
-              className="ml-auto"
-            >
-              {isEditable ? 'Disable Editing' : 'Change Values'}
-            </Button>
-            <Button 
-              onClick={handleSaveAll} 
-              size="lg" 
-              disabled={!isEditable}
-            >
-              <Save className="w-5 h-5 mr-2" />
-              Save All
-            </Button>
           </CardHeader>
         </Card>
+
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <DollarSign className="w-6 h-6" />
+              Salary Calculation
+            </CardTitle>
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-start-date" className="text-base font-medium">From:</Label>
+                <Input
+                  id="salary-start-date"
+                  type="date"
+                  value={salaryStartDate}
+                  onChange={(e) => setSalaryStartDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-end-date" className="text-base font-medium">To:</Label>
+                <Input
+                  id="salary-end-date"
+                  type="date"
+                  value={salaryEndDate}
+                  onChange={(e) => setSalaryEndDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <Button onClick={handleCalculateSalary} variant="outline" size="lg">
+                <Calculator className="w-5 h-5 mr-2" />
+                Calculate Salary
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {showSalaryResults && salaryResults.length > 0 && (
+          <Card className="border-4 border-green-300 bg-green-50/70">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-green-800 text-2xl">💰 Salary Calculation Results</CardTitle>
+              <p className="text-muted-foreground text-lg">
+                Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="font-bold text-base">Employee Name</TableHead>
+                      <TableHead className="font-bold text-base">Total Hours</TableHead>
+                      <TableHead className="font-bold text-base">Hourly Rate</TableHead>
+                      <TableHead className="font-bold text-base">Total Salary</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {salaryResults.map((result, index) => (
+                      <TableRow key={index} className="hover:bg-green-100/50">
+                        <TableCell className="font-medium text-base">{result.employee_name}</TableCell>
+                        <TableCell className="text-center text-base">{result.total_hours} hours</TableCell>
+                        <TableCell className="text-center text-base">₹{result.hourly_rate}</TableCell>
+                        <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="mt-8 p-6 bg-green-100 border-2 border-green-400 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-semibold text-green-800">Grand Total Amount:</span>
+                    <span className="text-3xl font-bold text-green-800">
+                      ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-base text-green-600 mt-3">
+                    Total employees: {salaryResults.length} | Total hours: {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-2">
           <CardHeader className="pb-4">
@@ -200,11 +336,11 @@ const BulkTimeTracking = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map(employee => {
+                  {employees.map((employee) => {
                     const hours = employeeHours[employee.id]?.hours || 0;
                     const status = employeeHours[employee.id]?.status || 'present';
                     const totalPay = hours * (employee.salary_per_hour || 0);
-
+                    
                     return (
                       <TableRow key={employee.id} className="hover:bg-accent/50">
                         <TableCell className="font-medium text-base">{employee.name}</TableCell>
@@ -215,25 +351,14 @@ const BulkTimeTracking = () => {
                             min="0"
                             max="24"
                             value={hours}
-                            onChange={e => {
-                              if (!isEditable) return;
-                              const val = parseFloat(e.target.value);
-                              if (!isNaN(val) && val >= 0 && val <= 24) {
-                                updateEmployeeHours(employee.id, val);
-                              }
-                            }}
+                            onChange={(e) => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
                             className="w-24 text-base"
-                            disabled={!isEditable}
                           />
                         </TableCell>
                         <TableCell>
                           <Select
                             value={status}
-                            onValueChange={value => {
-                              if (!isEditable) return;
-                              updateEmployeeStatus(employee.id, value as any);
-                            }}
-                            disabled={!isEditable}
+                            onValueChange={(value: any) => updateEmployeeStatus(employee.id, value)}
                           >
                             <SelectTrigger className="w-36 text-base">
                               <SelectValue />
