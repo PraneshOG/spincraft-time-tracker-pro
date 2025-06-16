@@ -20,14 +20,10 @@ const BulkTimeTracking = () => {
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
-  
-  // New state for salary calculation date range
   const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryResults, setSalaryResults] = useState<any[]>([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
-
-  // New state to enable/disable editing of hours and status inputs
   const [isEditable, setIsEditable] = useState(false);
 
   useEffect(() => {
@@ -76,29 +72,48 @@ const BulkTimeTracking = () => {
     }));
   };
 
+  // Updated handleSaveAll to only save changed logs
   const handleSaveAll = async () => {
     try {
-      const workLogsToSave = employees
-        .filter(emp => employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present')
-        .map(emp => ({
-          employee_id: emp.id,
-          date: selectedDate,
-          total_hours: employeeHours[emp.id]?.hours || 0,
-          status: employeeHours[emp.id]?.status || 'present',
-          created_by: admin?.id || 'admin'
-        }));
+      // Build a Map for quick lookup of existing logs by employee_id
+      const existingLogsMap = new Map<string, { total_hours: number; status: string }>();
+      workLogs.forEach(log => {
+        existingLogsMap.set(log.employee_id, { total_hours: log.total_hours, status: log.status });
+      });
+
+      const workLogsToSave = employees.reduce((acc, emp) => {
+        const edited = employeeHours[emp.id];
+        if (!edited) return acc; // no data to save
+
+        const existing = existingLogsMap.get(emp.id);
+        // Check if hours or status changed from existing or if no existing log
+        const hoursChanged = !existing || existing.total_hours !== edited.hours;
+        const statusChanged = !existing || existing.status !== edited.status;
+
+        // Add only if something changed and hours > 0 or status is different from 'present'
+        if ((hoursChanged || statusChanged) && (edited.hours > 0 || edited.status !== 'present')) {
+          acc.push({
+            employee_id: emp.id,
+            date: selectedDate,
+            total_hours: edited.hours,
+            status: edited.status,
+            created_by: admin?.id || 'admin'
+          });
+        }
+        return acc;
+      }, [] as Array<{ employee_id: string; date: string; total_hours: number; status: string; created_by: string }>);
 
       if (workLogsToSave.length === 0) {
         toast({
           title: "No Changes",
-          description: "No hours or status changes to save.",
+          description: "No updated hours or status to save.",
         });
         return;
       }
 
       await addBulkWorkLogs(workLogsToSave);
-      await addAdminLog('BULK_TIME_TRACKING', `Added time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
-      
+      await addAdminLog('BULK_TIME_TRACKING', `Added/Updated time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
+
       toast({
         title: "Time Logs Saved",
         description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
@@ -112,7 +127,7 @@ const BulkTimeTracking = () => {
     }
   };
 
-  // ...handleCalculateSalary() and other functions remain unchanged...
+  // Rest of component code remains unchanged (handleCalculateSalary, render etc.)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -129,7 +144,7 @@ const BulkTimeTracking = () => {
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
           <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
-        
+
         <Card className="border-2">
           <CardHeader className="pb-4 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-3">
@@ -141,7 +156,7 @@ const BulkTimeTracking = () => {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-auto min-w-48 text-base"
-                disabled={isEditable === false}
+                disabled={!isEditable}
               />
             </div>
             
@@ -156,8 +171,9 @@ const BulkTimeTracking = () => {
           </CardHeader>
         </Card>
 
-        {/* The rest of your cards and salary calculation UI stay unchanged */}
+        {/* Salary calculation, results, and employee table similar to original (with inputs disabled based on isEditable) */}
 
+        {/* Employee hours table: ensure inputs respect isEditable */}
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Employee Hours for {formatDate(selectedDate)}</CardTitle>
@@ -179,7 +195,7 @@ const BulkTimeTracking = () => {
                     const hours = employeeHours[employee.id]?.hours || 0;
                     const status = employeeHours[employee.id]?.status || 'present';
                     const totalPay = hours * (employee.salary_per_hour || 0);
-                    
+
                     return (
                       <TableRow key={employee.id} className="hover:bg-accent/50">
                         <TableCell className="font-medium text-base">{employee.name}</TableCell>
@@ -237,3 +253,4 @@ const BulkTimeTracking = () => {
 };
 
 export default BulkTimeTracking;
+
