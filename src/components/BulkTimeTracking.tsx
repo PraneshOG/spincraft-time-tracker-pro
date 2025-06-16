@@ -20,46 +20,50 @@ const BulkTimeTracking = () => {
   const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
   const [isEditable, setIsEditable] = useState(false);
 
-  // Ref to prevent overwriting user input when editing
-  const initializedRef = useRef(false);
+  // Track if employeeHours initialized for current edit session to prevent overwriting user changes
+  const editingInitializedRef = useRef(false);
 
+  // Fetch work logs on selectedDate change
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-    setIsEditable(false);
-    initializedRef.current = false;
+    setIsEditable(false);  // Disable editing on date change to avoid confusion
+    editingInitializedRef.current = false;  // Reset edit init flag on date change
   }, [selectedDate, fetchWorkLogs]);
 
+  // When not editing, sync employeeHours to fetched workLogs for that date
   useEffect(() => {
     if (!isEditable) {
-      const updatedHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+      const initialValues: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
       employees.forEach(emp => {
-        const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+        const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
         if (log) {
-          updatedHours[emp.id] = { hours: log.total_hours, status: log.status as any };
+          initialValues[emp.id] = { hours: log.total_hours, status: log.status as any };
         } else {
-          updatedHours[emp.id] = { hours: 0, status: 'present' };
+          initialValues[emp.id] = { hours: 0, status: 'present' };
         }
       });
-      setEmployeeHours(updatedHours);
-      initializedRef.current = false;
+      setEmployeeHours(initialValues);
+      editingInitializedRef.current = false;  // Reset init since not editing
     }
   }, [workLogs, employees, selectedDate, isEditable]);
 
+  // When editing enabled, initialize employeeHours once from current displayed values if not already done
   useEffect(() => {
-    if (isEditable && !initializedRef.current) {
+    if (isEditable && !editingInitializedRef.current) {
+      // If employeeHours is empty, initialize it
       if (Object.keys(employeeHours).length === 0) {
-        const initialHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+        const initialVals: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
         employees.forEach(emp => {
-          const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+          const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
           if (log) {
-            initialHours[emp.id] = { hours: log.total_hours, status: log.status as any };
+            initialVals[emp.id] = { hours: log.total_hours, status: log.status as any };
           } else {
-            initialHours[emp.id] = { hours: 0, status: 'present' };
+            initialVals[emp.id] = { hours: 0, status: 'present' };
           }
         });
-        setEmployeeHours(initialHours);
+        setEmployeeHours(initialVals);
       }
-      initializedRef.current = true;
+      editingInitializedRef.current = true;
     }
   }, [isEditable, employeeHours, employees, selectedDate, workLogs]);
 
@@ -79,51 +83,64 @@ const BulkTimeTracking = () => {
 
   const handleSaveAll = async () => {
     try {
-      const existingMap = new Map<string, { total_hours: number; status: string }>();
+      const existingLogsMap = new Map<string, { total_hours: number; status: string }>();
       workLogs.forEach(log => {
-        existingMap.set(log.employee_id, { total_hours: log.total_hours, status: log.status });
+        existingLogsMap.set(log.employee_id, { total_hours: log.total_hours, status: log.status });
       });
 
-      const toSave = employees.reduce((acc, emp) => {
+      const workLogsToSave = employees.reduce((acc, emp) => {
         const edited = employeeHours[emp.id];
         if (!edited) return acc;
-        const existing = existingMap.get(emp.id);
-        const changedHours = !existing || existing.total_hours !== edited.hours;
-        const changedStatus = !existing || existing.status !== edited.status;
 
-        if ((changedHours || changedStatus) && (edited.hours > 0 || edited.status !== 'present')) {
+        const existing = existingLogsMap.get(emp.id);
+        const hoursChanged = !existing || existing.total_hours !== edited.hours;
+        const statusChanged = !existing || existing.status !== edited.status;
+
+        if ((hoursChanged || statusChanged) && (edited.hours > 0 || edited.status !== 'present')) {
           acc.push({
             employee_id: emp.id,
             date: selectedDate,
             total_hours: edited.hours,
             status: edited.status,
-            created_by: admin?.id || 'admin',
+            created_by: admin?.id || 'admin'
           });
         }
         return acc;
       }, [] as Array<{ employee_id: string; date: string; total_hours: number; status: string; created_by: string }>);
 
-      if (toSave.length === 0) {
-        toast({ title: 'No Changes', description: 'No updated hours or status to save.' });
+      if (workLogsToSave.length === 0) {
+        toast({
+          title: "No Changes",
+          description: "No updated hours or status to save.",
+        });
         return;
       }
 
-      await addBulkWorkLogs(toSave);
-      await addAdminLog('BULK_TIME_TRACKING', `Added/Updated time logs for ${toSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
+      await addBulkWorkLogs(workLogsToSave);
+      await addAdminLog('BULK_TIME_TRACKING', `Added/Updated time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
 
       toast({
-        title: 'Time Logs Saved',
-        description: `Successfully saved time logs for ${toSave.length} employees.`,
+        title: "Time Logs Saved",
+        description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
       });
       setIsEditable(false);
-      initializedRef.current = false;
-    } catch {
-      toast({ title: 'Error', description: 'Failed to save time logs', variant: 'destructive' });
+      editingInitializedRef.current = false;
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save time logs",
+        variant: "destructive",
+      });
     }
   };
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -144,13 +161,22 @@ const BulkTimeTracking = () => {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-auto min-w-48 text-base"
-                disabled={!isEditable}
+                disabled={isEditable === false}
               />
             </div>
-            <Button onClick={() => setIsEditable(prev => !prev)} variant={isEditable ? 'outline' : 'default'} size="lg" className="ml-auto">
+            <Button 
+              onClick={() => setIsEditable(prev => !prev)} 
+              variant={isEditable ? 'outline' : 'default'} 
+              size="lg" 
+              className="ml-auto"
+            >
               {isEditable ? 'Disable Editing' : 'Change Values'}
             </Button>
-            <Button onClick={handleSaveAll} size="lg" disabled={!isEditable}>
+            <Button 
+              onClick={handleSaveAll} 
+              size="lg" 
+              disabled={!isEditable}
+            >
               <Save className="w-5 h-5 mr-2" />
               Save All
             </Button>
@@ -174,39 +200,40 @@ const BulkTimeTracking = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map(emp => {
-                    const hours = employeeHours[emp.id]?.hours ?? 0;
-                    const status = employeeHours[emp.id]?.status ?? 'present';
-                    const totalPay = hours * (emp.salary_per_hour || 0);
+                  {employees.map(employee => {
+                    const hours = employeeHours[employee.id]?.hours || 0;
+                    const status = employeeHours[employee.id]?.status || 'present';
+                    const totalPay = hours * (employee.salary_per_hour || 0);
+
                     return (
-                      <TableRow key={emp.id} className="hover:bg-accent/50">
-                        <TableCell className="font-medium text-base">{emp.name}</TableCell>
+                      <TableRow key={employee.id} className="hover:bg-accent/50">
+                        <TableCell className="font-medium text-base">{employee.name}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            step={0.5}
-                            min={0}
-                            max={24}
+                            step="0.5"
+                            min="0"
+                            max="24"
                             value={hours}
-                            disabled={!isEditable}
                             onChange={e => {
                               if (!isEditable) return;
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val) && val >= 0 && val <= 24) {
-                                updateEmployeeHours(emp.id, val);
+                                updateEmployeeHours(employee.id, val);
                               }
                             }}
                             className="w-24 text-base"
+                            disabled={!isEditable}
                           />
                         </TableCell>
                         <TableCell>
                           <Select
                             value={status}
-                            disabled={!isEditable}
                             onValueChange={value => {
                               if (!isEditable) return;
-                              updateEmployeeStatus(emp.id, value as any);
+                              updateEmployeeStatus(employee.id, value as any);
                             }}
+                            disabled={!isEditable}
                           >
                             <SelectTrigger className="w-36 text-base">
                               <SelectValue />
@@ -219,7 +246,7 @@ const BulkTimeTracking = () => {
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell className="text-base">₹{emp.salary_per_hour}</TableCell>
+                        <TableCell className="text-base">₹{employee.salary_per_hour}</TableCell>
                         <TableCell className="font-semibold text-base">₹{totalPay.toFixed(2)}</TableCell>
                       </TableRow>
                     );
