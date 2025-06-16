@@ -57,6 +57,7 @@ const BulkTimeTracking = () => {
       }
     });
     setEmployeeHours(updatedHours);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workLogs, selectedDate, employees]);
 
   const updateEmployeeHours = (employeeId: string, hours: number) => {
@@ -130,7 +131,7 @@ const BulkTimeTracking = () => {
       }
 
       // Fetch work logs for the selected period
-      const { data: workLogs, error } = await supabase
+      const { data: workLogsData, error } = await supabase
         .from('work_logs')
         .select(`
           *,
@@ -147,7 +148,7 @@ const BulkTimeTracking = () => {
       if (error) throw error;
 
       // Group by employee and calculate totals
-      const employeeTotals = workLogs?.reduce((acc: any, log: any) => {
+      const employeeTotals = workLogsData?.reduce((acc: any, log: any) => {
         const empId = log.employee_id;
         if (!acc[empId]) {
           acc[empId] = {
@@ -276,7 +277,7 @@ const BulkTimeTracking = () => {
         {showSalaryResults && salaryResults.length > 0 && (
           <Card className="border-4 border-green-300 bg-green-50/70">
             <CardHeader className="pb-4">
-              <CardTitle className="text-green-800 text-2xl">💰 Salary Calculation Results</CardTitle>
+              <CardTitle className="text-green-800 text-2xl">Salary Calculation Results</CardTitle>
               <p className="text-muted-foreground text-lg">
                 Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
               </p>
@@ -351,7 +352,12 @@ const BulkTimeTracking = () => {
                             min="0"
                             max="24"
                             value={hours}
-                            onChange={(e) => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0 && val <= 24) {
+                                updateEmployeeHours(employee.id, val);
+                              }
+                            }}
                             className="w-24 text-base"
                           />
                         </TableCell>
@@ -387,3 +393,4 @@ const BulkTimeTracking = () => {
 };
 
 export default BulkTimeTracking;
+
