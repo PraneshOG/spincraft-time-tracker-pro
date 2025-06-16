@@ -5,9 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
-import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
-import { supabase } from '@/integrations/supabase/client';
+import { Save, Calendar } from 'lucide-react';
+import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -15,40 +14,58 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { addBulkWorkLogs, workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
-  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
-  const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [salaryResults, setSalaryResults] = useState<any[]>([]);
-  const [showSalaryResults, setShowSalaryResults] = useState(false);
-
   const [isEditable, setIsEditable] = useState(false);
 
-  // Ref to prevent reinitializing employeeHours when editing is enabled
-  const initializedRef = useRef(false);
+  // Track if employeeHours initialized for current edit session to prevent overwriting user changes
+  const editingInitializedRef = useRef(false);
 
+  // Fetch work logs on selectedDate change
+  useEffect(() => {
+    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+    setIsEditable(false);  // Disable editing on date change to avoid confusion
+    editingInitializedRef.current = false;  // Reset edit init flag on date change
+  }, [selectedDate, fetchWorkLogs]);
+
+  // When not editing, sync employeeHours to fetched workLogs for that date
   useEffect(() => {
     if (!isEditable) {
-      // Only sync employeeHours from fetched workLogs when NOT editing
-      const updatedHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+      const initialValues: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
       employees.forEach(emp => {
-        const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
-        if (existingLog) {
-          updatedHours[emp.id] = {
-            hours: existingLog.total_hours,
-            status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
-          };
+        const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
+        if (log) {
+          initialValues[emp.id] = { hours: log.total_hours, status: log.status as any };
         } else {
-          updatedHours[emp.id] = { hours: 0, status: 'present' };
+          initialValues[emp.id] = { hours: 0, status: 'present' };
         }
       });
-      setEmployeeHours(updatedHours);
-      initializedRef.current = false; // reset to allow init next edit session
+      setEmployeeHours(initialValues);
+      editingInitializedRef.current = false;  // Reset init since not editing
     }
-  }, [workLogs, selectedDate, employees, isEditable]);
+  }, [workLogs, employees, selectedDate, isEditable]);
+
+  // When editing enabled, initialize employeeHours once from current displayed values if not already done
+  useEffect(() => {
+    if (isEditable && !editingInitializedRef.current) {
+      // If employeeHours is empty, initialize it
+      if (Object.keys(employeeHours).length === 0) {
+        const initialVals: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+        employees.forEach(emp => {
+          const log = workLogs.find(wl => wl.employee_id === emp.id && wl.date === selectedDate);
+          if (log) {
+            initialVals[emp.id] = { hours: log.total_hours, status: log.status as any };
+          } else {
+            initialVals[emp.id] = { hours: 0, status: 'present' };
+          }
+        });
+        setEmployeeHours(initialVals);
+      }
+      editingInitializedRef.current = true;
+    }
+  }, [isEditable, employeeHours, employees, selectedDate, workLogs]);
 
   const updateEmployeeHours = (employeeId: string, hours: number) => {
     setEmployeeHours(prev => ({
@@ -62,30 +79,6 @@ const BulkTimeTracking = () => {
       ...prev,
       [employeeId]: { ...prev[employeeId], status }
     }));
-  };
-
-  // Called when toggling editing mode
-  const onToggleEdit = () => {
-    if (!isEditable && !initializedRef.current) {
-      // On enabling edit, initialize if employeeHours empty
-      if (Object.keys(employeeHours).length === 0) {
-        const initialHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
-        employees.forEach(emp => {
-          const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
-          if (existingLog) {
-            initialHours[emp.id] = {
-              hours: existingLog.total_hours,
-              status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
-            };
-          } else {
-            initialHours[emp.id] = { hours: 0, status: 'present' };
-          }
-        });
-        setEmployeeHours(initialHours);
-      }
-      initializedRef.current = true;
-    }
-    setIsEditable(!isEditable);
   };
 
   const handleSaveAll = async () => {
@@ -131,6 +124,7 @@ const BulkTimeTracking = () => {
         description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
       });
       setIsEditable(false);
+      editingInitializedRef.current = false;
     } catch (error) {
       toast({
         title: "Error",
@@ -167,13 +161,22 @@ const BulkTimeTracking = () => {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-auto min-w-48 text-base"
-                disabled={!isEditable}
+                disabled={isEditable === false}
               />
             </div>
-            <Button onClick={onToggleEdit} variant={isEditable ? 'outline' : 'default'} size="lg" className="ml-auto">
+            <Button 
+              onClick={() => setIsEditable(prev => !prev)} 
+              variant={isEditable ? 'outline' : 'default'} 
+              size="lg" 
+              className="ml-auto"
+            >
               {isEditable ? 'Disable Editing' : 'Change Values'}
             </Button>
-            <Button onClick={handleSaveAll} size="lg" disabled={!isEditable}>
+            <Button 
+              onClick={handleSaveAll} 
+              size="lg" 
+              disabled={!isEditable}
+            >
               <Save className="w-5 h-5 mr-2" />
               Save All
             </Button>
