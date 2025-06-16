@@ -24,39 +24,26 @@ const BulkTimeTracking = () => {
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryResults, setSalaryResults] = useState<any[]>([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
+
   const [isEditable, setIsEditable] = useState(false);
 
   useEffect(() => {
-    // Initialize employee hours state
-    const initialHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
-    employees.forEach(emp => {
-      initialHours[emp.id] = { hours: 0, status: 'present' };
-    });
-    setEmployeeHours(initialHours);
-  }, [employees]);
-
-  useEffect(() => {
-    // Fetch existing work logs for the selected date
-    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-  }, [selectedDate, fetchWorkLogs]);
-
-  useEffect(() => {
-    // Update employee hours based on existing work logs
-    const updatedHours = { ...employeeHours };
-    employees.forEach(emp => {
-      const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
-      if (existingLog) {
-        updatedHours[emp.id] = {
-          hours: existingLog.total_hours,
-          status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
-        };
-      } else if (!updatedHours[emp.id]) {
-        updatedHours[emp.id] = { hours: 0, status: 'present' };
-      }
-    });
-    setEmployeeHours(updatedHours);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workLogs, selectedDate, employees]);
+    if (!isEditable) {
+      const updatedHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+      employees.forEach(emp => {
+        const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
+        if (existingLog) {
+          updatedHours[emp.id] = {
+            hours: existingLog.total_hours,
+            status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
+          };
+        } else {
+          updatedHours[emp.id] = { hours: 0, status: 'present' };
+        }
+      });
+      setEmployeeHours(updatedHours);
+    }
+  }, [workLogs, selectedDate, employees, isEditable]);
 
   const updateEmployeeHours = (employeeId: string, hours: number) => {
     setEmployeeHours(prev => ({
@@ -72,10 +59,8 @@ const BulkTimeTracking = () => {
     }));
   };
 
-  // Updated handleSaveAll to only save changed logs
   const handleSaveAll = async () => {
     try {
-      // Build a Map for quick lookup of existing logs by employee_id
       const existingLogsMap = new Map<string, { total_hours: number; status: string }>();
       workLogs.forEach(log => {
         existingLogsMap.set(log.employee_id, { total_hours: log.total_hours, status: log.status });
@@ -83,14 +68,12 @@ const BulkTimeTracking = () => {
 
       const workLogsToSave = employees.reduce((acc, emp) => {
         const edited = employeeHours[emp.id];
-        if (!edited) return acc; // no data to save
+        if (!edited) return acc;
 
         const existing = existingLogsMap.get(emp.id);
-        // Check if hours or status changed from existing or if no existing log
         const hoursChanged = !existing || existing.total_hours !== edited.hours;
         const statusChanged = !existing || existing.status !== edited.status;
 
-        // Add only if something changed and hours > 0 or status is different from 'present'
         if ((hoursChanged || statusChanged) && (edited.hours > 0 || edited.status !== 'present')) {
           acc.push({
             employee_id: emp.id,
@@ -118,6 +101,7 @@ const BulkTimeTracking = () => {
         title: "Time Logs Saved",
         description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
       });
+      setIsEditable(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -126,8 +110,6 @@ const BulkTimeTracking = () => {
       });
     }
   };
-
-  // Rest of component code remains unchanged (handleCalculateSalary, render etc.)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -156,10 +138,10 @@ const BulkTimeTracking = () => {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-auto min-w-48 text-base"
-                disabled={!isEditable}
+                disabled={isEditable === false}
               />
             </div>
-            
+
             <Button onClick={() => setIsEditable(!isEditable)} variant={isEditable ? 'outline' : 'default'} size="lg" className="ml-auto">
               {isEditable ? 'Disable Editing' : 'Change Values'}
             </Button>
@@ -171,9 +153,6 @@ const BulkTimeTracking = () => {
           </CardHeader>
         </Card>
 
-        {/* Salary calculation, results, and employee table similar to original (with inputs disabled based on isEditable) */}
-
-        {/* Employee hours table: ensure inputs respect isEditable */}
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Employee Hours for {formatDate(selectedDate)}</CardTitle>
@@ -253,4 +232,3 @@ const BulkTimeTracking = () => {
 };
 
 export default BulkTimeTracking;
-
