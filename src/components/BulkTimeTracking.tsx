@@ -14,23 +14,20 @@ import { useAuth } from '@/hooks/useAuth';
 
 const BulkTimeTracking = () => {
   const { employees } = useEmployees();
-  const { addBulkWorkLogs, workLogs, fetchWorkLogs } = useWorkLogs();
+  const { workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
   const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [employeeHours, setEmployeeHours] = useState<Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }>>({});
-  
-  // New state for salary calculation date range
+  const [employeeHours, setEmployeeHours] = useState({});
   const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [salaryResults, setSalaryResults] = useState<any[]>([]);
+  const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
   useEffect(() => {
-    // Initialize employee hours state
-    const initialHours: Record<string, { hours: number; status: 'present' | 'absent' | 'overtime' | 'holiday' }> = {};
+    const initialHours = {};
     employees.forEach(emp => {
       initialHours[emp.id] = { hours: 0, status: 'present' };
     });
@@ -38,35 +35,34 @@ const BulkTimeTracking = () => {
   }, [employees]);
 
   useEffect(() => {
-    // Fetch existing work logs for the selected date
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
   useEffect(() => {
-    // Update employee hours based on existing work logs
     const updatedHours = { ...employeeHours };
     employees.forEach(emp => {
       const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
       if (existingLog) {
         updatedHours[emp.id] = {
           hours: existingLog.total_hours,
-          status: existingLog.status as 'present' | 'absent' | 'overtime' | 'holiday'
+          status: existingLog.status
         };
       } else if (!updatedHours[emp.id]) {
         updatedHours[emp.id] = { hours: 0, status: 'present' };
       }
     });
     setEmployeeHours(updatedHours);
+    // eslint-disable-next-line
   }, [workLogs, selectedDate, employees]);
 
-  const updateEmployeeHours = (employeeId: string, hours: number) => {
+  const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
       ...prev,
       [employeeId]: { ...prev[employeeId], hours }
     }));
   };
 
-  const updateEmployeeStatus = (employeeId: string, status: 'present' | 'absent' | 'overtime' | 'holiday') => {
+  const updateEmployeeStatus = (employeeId, status) => {
     setEmployeeHours(prev => ({
       ...prev,
       [employeeId]: { ...prev[employeeId], status }
@@ -75,17 +71,12 @@ const BulkTimeTracking = () => {
 
   const handleSaveAll = async () => {
     try {
-      const workLogsToSave = employees
-        .filter(emp => employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present')
-        .map(emp => ({
-          employee_id: emp.id,
-          date: selectedDate,
-          total_hours: employeeHours[emp.id]?.hours || 0,
-          status: employeeHours[emp.id]?.status || 'present',
-          created_by: admin?.id || 'admin'
-        }));
+      // Only consider employees with changes
+      const changedEmployees = employees.filter(emp => 
+        employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
+      );
 
-      if (workLogsToSave.length === 0) {
+      if (changedEmployees.length === 0) {
         toast({
           title: "No Changes",
           description: "No hours or status changes to save.",
@@ -93,13 +84,56 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      await addBulkWorkLogs(workLogsToSave);
-      await addAdminLog('BULK_TIME_TRACKING', `Added time logs for ${workLogsToSave.length} employees on ${selectedDate}`, admin?.id || 'admin');
+      let updatedCount = 0;
+      let insertedCount = 0;
+
+      for (const emp of changedEmployees) {
+        const existingLog = workLogs.find(
+          log => log.employee_id === emp.id && log.date === selectedDate
+        );
+        const logData = {
+          employee_id: emp.id,
+          date: selectedDate,
+          total_hours: employeeHours[emp.id]?.hours || 0,
+          status: employeeHours[emp.id]?.status || 'present',
+          created_by: admin?.id || 'admin'
+        };
       
+        if (existingLog) {
+          // Update existing log
+          const { error } = await supabase
+            .from('work_logs')
+            .update({
+              total_hours: logData.total_hours,
+              status: logData.status,
+              created_by: logData.created_by
+            })
+            .eq('id', existingLog.id);
+          if (error) throw error;
+          updatedCount++;
+        } else {
+          // Insert new log
+          const { error } = await supabase
+            .from('work_logs')
+            .insert([logData]);
+          if (error) throw error;
+          insertedCount++;
+        }
+      }
+
+      await addAdminLog(
+        'BULK_TIME_TRACKING',
+        `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`,
+        admin?.id || 'admin'
+      );
+
       toast({
         title: "Time Logs Saved",
-        description: `Successfully saved time logs for ${workLogsToSave.length} employees.`,
+        description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
+
+      // Refresh work logs
+      fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
         title: "Error",
@@ -129,7 +163,6 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      // Fetch work logs for the selected period
       const { data: workLogs, error } = await supabase
         .from('work_logs')
         .select(`
@@ -146,8 +179,7 @@ const BulkTimeTracking = () => {
 
       if (error) throw error;
 
-      // Group by employee and calculate totals
-      const employeeTotals = workLogs?.reduce((acc: any, log: any) => {
+      const employeeTotals = workLogs?.reduce((acc, log) => {
         const empId = log.employee_id;
         if (!acc[empId]) {
           acc[empId] = {
@@ -161,8 +193,7 @@ const BulkTimeTracking = () => {
         return acc;
       }, {});
 
-      // Create salary calculation results
-      const calculations = Object.values(employeeTotals || {}).map((emp: any) => ({
+      const calculations = Object.values(employeeTotals || {}).map(emp => ({
         employee_id: emp.employee_id,
         employee_name: emp.employee_name,
         total_hours: emp.total_hours,
@@ -172,7 +203,7 @@ const BulkTimeTracking = () => {
 
       setSalaryResults(calculations);
       setShowSalaryResults(true);
-      
+
       toast({
         title: "Salary Calculated",
         description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
@@ -187,22 +218,12 @@ const BulkTimeTracking = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'present': return 'bg-green-500';
-      case 'absent': return 'bg-red-500';
-      case 'overtime': return 'bg-orange-500';
-      case 'holiday': return 'bg-blue-500';
-      default: return 'bg-gray-500';
-    }
   };
 
   return (
@@ -226,7 +247,7 @@ const BulkTimeTracking = () => {
                   id="date"
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={e => setSelectedDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -251,7 +272,7 @@ const BulkTimeTracking = () => {
                   id="salary-start-date"
                   type="date"
                   value={salaryStartDate}
-                  onChange={(e) => setSalaryStartDate(e.target.value)}
+                  onChange={e => setSalaryStartDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -261,7 +282,7 @@ const BulkTimeTracking = () => {
                   id="salary-end-date"
                   type="date"
                   value={salaryEndDate}
-                  onChange={(e) => setSalaryEndDate(e.target.value)}
+                  onChange={e => setSalaryEndDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -336,11 +357,11 @@ const BulkTimeTracking = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((employee) => {
+                  {employees.map(employee => {
                     const hours = employeeHours[employee.id]?.hours || 0;
                     const status = employeeHours[employee.id]?.status || 'present';
                     const totalPay = hours * (employee.salary_per_hour || 0);
-                    
+
                     return (
                       <TableRow key={employee.id} className="hover:bg-accent/50">
                         <TableCell className="font-medium text-base">{employee.name}</TableCell>
@@ -351,14 +372,14 @@ const BulkTimeTracking = () => {
                             min="0"
                             max="24"
                             value={hours}
-                            onChange={(e) => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
+                            onChange={e => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
                             className="w-24 text-base"
                           />
                         </TableCell>
                         <TableCell>
                           <Select
                             value={status}
-                            onValueChange={(value: any) => updateEmployeeStatus(employee.id, value)}
+                            onValueChange={value => updateEmployeeStatus(employee.id, value)}
                           >
                             <SelectTrigger className="w-36 text-base">
                               <SelectValue />
@@ -380,10 +401,4 @@ const BulkTimeTracking = () => {
               </Table>
             </div>
           </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
 
-export default BulkTimeTracking;
