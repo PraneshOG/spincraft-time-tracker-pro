@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,35 +25,25 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Keep track of when a reset is needed (after save or date change)
-  const shouldSyncRef = useRef(true);
+  // Always fetch logs when date changes
+  useEffect(() => {
+    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+  }, [selectedDate, fetchWorkLogs]);
 
-  // (Re)initialize employeeHours when date or employees change, or after save
+  // Always sync employeeHours with latest workLogs and employees
   useEffect(() => {
     if (!employees.length) return;
-    // On certain triggers, sync UI with workLogs
-    if (shouldSyncRef.current) {
-      const newHours = {};
-      employees.forEach(emp => {
-        const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
-        if (log) {
-          newHours[emp.id] = { hours: log.total_hours, status: log.status };
-        } else {
-          newHours[emp.id] = { hours: 0, status: 'present' };
-        }
-      });
-      setEmployeeHours(newHours);
-      shouldSyncRef.current = false;
-    }
-    // eslint-disable-next-line
-  }, [workLogs, employees, selectedDate]);
-
-  // Whenever the date changes, fetch the logs and sync on next load
-  useEffect(() => {
-    shouldSyncRef.current = true;
-    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-    // eslint-disable-next-line
-  }, [selectedDate]);
+    const newHours = {};
+    employees.forEach(emp => {
+      const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+      if (log) {
+        newHours[emp.id] = { hours: log.total_hours, status: log.status };
+      } else {
+        newHours[emp.id] = { hours: 0, status: 'present' };
+      }
+    });
+    setEmployeeHours(newHours);
+  }, [employees, selectedDate, workLogs]);
 
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
@@ -128,8 +118,7 @@ const BulkTimeTracking = () => {
         description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
 
-      // FETCH LATEST after save, and re-sync UI after fetch
-      shouldSyncRef.current = true;
+      // Refetch work logs (to keep the workLogs array up to date)
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
