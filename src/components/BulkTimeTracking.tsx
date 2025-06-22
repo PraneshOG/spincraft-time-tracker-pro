@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,20 +25,9 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
+  // Only initialize employeeHours when employees or selectedDate changes.
   useEffect(() => {
-    const initialHours = {};
-    employees.forEach(emp => {
-      initialHours[emp.id] = { hours: 0, status: 'present' };
-    });
-    setEmployeeHours(initialHours);
-  }, [employees]);
-
-  useEffect(() => {
-    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-  }, [selectedDate, fetchWorkLogs]);
-
-  useEffect(() => {
-    const updatedHours = { ...employeeHours };
+    const updatedHours = {};
     employees.forEach(emp => {
       const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
       if (existingLog) {
@@ -47,13 +35,18 @@ const BulkTimeTracking = () => {
           hours: existingLog.total_hours,
           status: existingLog.status
         };
-      } else if (!updatedHours[emp.id]) {
+      } else {
         updatedHours[emp.id] = { hours: 0, status: 'present' };
       }
     });
     setEmployeeHours(updatedHours);
     // eslint-disable-next-line
-  }, [workLogs, selectedDate, employees]);
+  }, [employees, selectedDate]);
+// Notice: workLogs was intentionally removed from deps!
+
+  useEffect(() => {
+    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+  }, [selectedDate, fetchWorkLogs]);
 
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
@@ -72,7 +65,7 @@ const BulkTimeTracking = () => {
   const handleSaveAll = async () => {
     try {
       // Only consider employees with changes
-      const changedEmployees = employees.filter(emp => 
+      const changedEmployees = employees.filter(emp =>
         employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
       );
 
@@ -98,7 +91,6 @@ const BulkTimeTracking = () => {
           status: employeeHours[emp.id]?.status || 'present',
           created_by: admin?.id || 'admin'
         };
-      
         if (existingLog) {
           // Update existing log
           const { error } = await supabase
@@ -132,7 +124,7 @@ const BulkTimeTracking = () => {
         description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
 
-      // Refresh work logs
+      // Refetch work logs (to keep the workLogs array up to date)
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
@@ -233,7 +225,6 @@ const BulkTimeTracking = () => {
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
           <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
-        
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl">
@@ -401,4 +392,11 @@ const BulkTimeTracking = () => {
               </Table>
             </div>
           </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default BulkTimeTracking;
 
