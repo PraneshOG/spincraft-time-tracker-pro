@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,28 +25,35 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Only initialize employeeHours when employees or selectedDate changes.
-  useEffect(() => {
-    const updatedHours = {};
-    employees.forEach(emp => {
-      const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
-      if (existingLog) {
-        updatedHours[emp.id] = {
-          hours: existingLog.total_hours,
-          status: existingLog.status
-        };
-      } else {
-        updatedHours[emp.id] = { hours: 0, status: 'present' };
-      }
-    });
-    setEmployeeHours(updatedHours);
-    // eslint-disable-next-line
-  }, [employees, selectedDate]);
-// Notice: workLogs was intentionally removed from deps!
+  // Keep track of when a reset is needed (after save or date change)
+  const shouldSyncRef = useRef(true);
 
+  // (Re)initialize employeeHours when date or employees change, or after save
   useEffect(() => {
+    if (!employees.length) return;
+    // On certain triggers, sync UI with workLogs
+    if (shouldSyncRef.current) {
+      const newHours = {};
+      employees.forEach(emp => {
+        const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+        if (log) {
+          newHours[emp.id] = { hours: log.total_hours, status: log.status };
+        } else {
+          newHours[emp.id] = { hours: 0, status: 'present' };
+        }
+      });
+      setEmployeeHours(newHours);
+      shouldSyncRef.current = false;
+    }
+    // eslint-disable-next-line
+  }, [workLogs, employees, selectedDate]);
+
+  // Whenever the date changes, fetch the logs and sync on next load
+  useEffect(() => {
+    shouldSyncRef.current = true;
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-  }, [selectedDate, fetchWorkLogs]);
+    // eslint-disable-next-line
+  }, [selectedDate]);
 
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
@@ -64,7 +71,6 @@ const BulkTimeTracking = () => {
 
   const handleSaveAll = async () => {
     try {
-      // Only consider employees with changes
       const changedEmployees = employees.filter(emp =>
         employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
       );
@@ -92,7 +98,6 @@ const BulkTimeTracking = () => {
           created_by: admin?.id || 'admin'
         };
         if (existingLog) {
-          // Update existing log
           const { error } = await supabase
             .from('work_logs')
             .update({
@@ -104,7 +109,6 @@ const BulkTimeTracking = () => {
           if (error) throw error;
           updatedCount++;
         } else {
-          // Insert new log
           const { error } = await supabase
             .from('work_logs')
             .insert([logData]);
@@ -124,7 +128,8 @@ const BulkTimeTracking = () => {
         description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
 
-      // Refetch work logs (to keep the workLogs array up to date)
+      // FETCH LATEST after save, and re-sync UI after fetch
+      shouldSyncRef.current = true;
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
@@ -201,7 +206,6 @@ const BulkTimeTracking = () => {
         description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
       });
     } catch (error) {
-      console.error('Error calculating salary:', error);
       toast({
         title: "Error",
         description: "Failed to calculate salary",
@@ -399,4 +403,3 @@ const BulkTimeTracking = () => {
 };
 
 export default BulkTimeTracking;
-
