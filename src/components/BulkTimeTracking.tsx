@@ -13,39 +13,41 @@ import { useAuth } from '@/hooks/useAuth';
 
 const BulkTimeTracking = () => {
   const { employees } = useEmployees();
-  // Your useWorkLogs hook already provides the 'loading' state, which is perfect.
   const { workLogs, fetchWorkLogs, loading: workLogsLoading } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [employeeHours, setEmployeeHours] = useState({});
+  
+  // --- START: DEFINITIVE FLICKER FIX ---
+  // We introduce a dedicated state to manage when the form should be populated.
+  // This avoids the flicker caused by clearing `employeeHours` directly.
+  const [isPopulating, setIsPopulating] = useState(true);
+  // --- END: DEFINITIVE FLICKER FIX ---
+
   const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // --- START: CORE FIX FOR DATA LOADING AND EDITING ---
-
   // Effect 1: Reacts to DATE CHANGE.
-  // This effect runs only when `selectedDate` changes. It clears the old
-  // form data and triggers a fetch for the new date's data.
+  // When the date changes, we trigger a refetch and set the `isPopulating` flag to true.
+  // We no longer clear the employeeHours state here, which prevents the flicker.
   useEffect(() => {
-    // Clear out old hours to indicate a loading state.
-    setEmployeeHours({});
+    setIsPopulating(true); // Signal that we are now waiting for new data.
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
   // Effect 2: Populates the form with DATA.
-  // This effect runs when data changes. It waits until all necessary data
-  // (`employees` and `workLogs`) has arrived before populating the form,
-  // preventing the race condition on page load.
+  // This effect runs when its dependencies change, but the logic inside only
+  // executes when the `isPopulating` flag is true and the necessary data is ready.
   useEffect(() => {
     // We populate only when:
-    // 1. We have the list of employees.
-    // 2. The form is empty (cleared by Effect 1, ready for new data).
-    // 3. The workLogs are NOT currently being fetched. This is the key check.
-    if (employees.length > 0 && Object.keys(employeeHours).length === 0 && !workLogsLoading) {
+    // 1. The `isPopulating` flag is set.
+    // 2. We have the list of employees.
+    // 3. The workLogs are NOT currently being fetched.
+    if (isPopulating && employees.length > 0 && !workLogsLoading) {
       const newHours = {};
       employees.forEach(emp => {
         const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
@@ -56,13 +58,11 @@ const BulkTimeTracking = () => {
         }
       });
       setEmployeeHours(newHours);
+      setIsPopulating(false); // We're done populating, turn the flag off.
     }
-  }, [employees, workLogs, employeeHours, selectedDate, workLogsLoading]);
-
-  // --- END: CORE FIX ---
+  }, [isPopulating, employees, workLogs, workLogsLoading, selectedDate]);
 
   const updateEmployeeHours = (employeeId, value) => {
-    // Allow an empty string for better UX, but treat it as 0 for calculations.
     const hours = value === '' ? '' : parseFloat(value);
     setEmployeeHours(prev => ({
       ...prev,
@@ -78,23 +78,19 @@ const BulkTimeTracking = () => {
   };
 
   const handleSaveAll = async () => {
+    // ... function is unchanged, but now more stable due to corrected state management ...
     try {
       const changedEntries = Object.entries(employeeHours).filter(([empId, data]) => {
         const originalLog = workLogs.find(l => l.employee_id === empId && l.date === selectedDate);
         const currentHours = typeof data.hours === 'number' ? data.hours : 0;
-        
         if (originalLog) {
           return originalLog.total_hours !== currentHours || originalLog.status !== data.status;
         }
-        // If no original log, save if hours are entered or status is changed from default.
         return currentHours > 0 || data.status !== 'present';
       });
 
       if (changedEntries.length === 0) {
-        toast({
-          title: "No Changes",
-          description: "No hours or status changes to save.",
-        });
+        toast({ title: "No Changes", description: "No hours or status changes to save." });
         return;
       }
 
@@ -122,72 +118,39 @@ const BulkTimeTracking = () => {
         }
       }
 
-      await addAdminLog(
-        'BULK_TIME_TRACKING',
-        `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`,
-        admin?.id || 'admin'
-      );
-
-      toast({
-        title: "Time Logs Saved",
-        description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
-      });
-      
-      // Refetch to keep local state consistent after saving.
+      await addAdminLog('BULK_TIME_TRACKING', `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`, admin?.id || 'admin');
+      toast({ title: "Time Logs Saved", description: `Updated ${updatedCount} and added ${insertedCount} time logs.` });
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: `Failed to save time logs: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: `Failed to save time logs: ${error.message}`, variant: "destructive" });
     }
   };
 
   const handleCalculateSalary = async () => {
+    // ... function is unchanged ...
     try {
       if (!salaryStartDate || !salaryEndDate) {
         toast({ title: "Missing Dates", description: "Please select both start and end dates.", variant: "destructive" });
         return;
       }
-
       if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
         toast({ title: "Invalid Date Range", description: "Start date must be before or equal to end date.", variant: "destructive" });
         return;
       }
-
-      const { data: workLogsForSalary, error } = await supabase
-        .from('work_logs')
-        .select('*, employees (id, name, salary_per_hour)')
-        .gte('date', salaryStartDate)
-        .lte('date', salaryEndDate)
-        .eq('status', 'present');
-
+      const { data: workLogsForSalary, error } = await supabase.from('work_logs').select('*, employees (id, name, salary_per_hour)').gte('date', salaryStartDate).lte('date', salaryEndDate).eq('status', 'present');
       if (error) throw error;
-
       const employeeTotals = workLogsForSalary?.reduce((acc, log) => {
         const empId = log.employee_id;
         if (!acc[empId]) {
-          acc[empId] = {
-            employee_id: empId,
-            employee_name: log.employees?.name || 'Unknown',
-            total_hours: 0,
-            hourly_rate: log.employees?.salary_per_hour || 0
-          };
+          acc[empId] = { employee_id: empId, employee_name: log.employees?.name || 'Unknown', total_hours: 0, hourly_rate: log.employees?.salary_per_hour || 0 };
         }
         acc[empId].total_hours += log.total_hours;
         return acc;
       }, {});
-
       const calculations = Object.values(employeeTotals || {}).map(emp => ({ ...emp, total_salary: emp.total_hours * emp.hourly_rate }));
-
       setSalaryResults(calculations);
       setShowSalaryResults(true);
-
-      toast({
-        title: "Salary Calculated",
-        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
-      });
+      toast({ title: "Salary Calculated", description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.` });
     } catch (error) {
       toast({ title: "Error", description: `Failed to calculate salary: ${error.message}`, variant: "destructive" });
     }
@@ -197,17 +160,18 @@ const BulkTimeTracking = () => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   };
-
-  const isFormLoading = Object.keys(employeeHours).length === 0;
+  
+  // The form is considered loading if we are in the "populating" phase.
+  const isFormLoading = isPopulating;
 
   return (
+    // The JSX is unchanged, but the `disabled={isFormLoading}` prop now provides a much smoother experience.
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
           <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
-        
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl"><Calendar className="w-6 h-6" />Select Date</CardTitle>
@@ -222,7 +186,6 @@ const BulkTimeTracking = () => {
             </div>
           </CardHeader>
         </Card>
-
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl"><DollarSign className="w-6 h-6" />Salary Calculation</CardTitle>
@@ -239,7 +202,6 @@ const BulkTimeTracking = () => {
             </div>
           </CardHeader>
         </Card>
-
         {showSalaryResults && salaryResults.length > 0 && (
           <Card className="border-4 border-green-300 bg-green-50/70">
             <CardHeader className="pb-4">
@@ -250,16 +212,7 @@ const BulkTimeTracking = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>Employee Name</TableHead><TableHead>Total Hours</TableHead><TableHead>Hourly Rate</TableHead><TableHead>Total Salary</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {salaryResults.map((result, index) => (
-                      <TableRow key={index} className="hover:bg-green-100/50">
-                        <TableCell className="font-medium">{result.employee_name}</TableCell>
-                        <TableCell className="text-center">{result.total_hours} hours</TableCell>
-                        <TableCell className="text-center">₹{result.hourly_rate}</TableCell>
-                        <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                  <TableBody>{salaryResults.map((result, index) => (<TableRow key={index} className="hover:bg-green-100/50"><TableCell className="font-medium">{result.employee_name}</TableCell><TableCell className="text-center">{result.total_hours} hours</TableCell><TableCell className="text-center">₹{result.hourly_rate}</TableCell><TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell></TableRow>))}</TableBody>
                 </Table>
                 <div className="mt-8 p-6 bg-green-100 border-2 border-green-400 rounded-lg">
                   <div className="flex justify-between items-center">
@@ -272,7 +225,6 @@ const BulkTimeTracking = () => {
             </CardContent>
           </Card>
         )}
-
         <Card className="border-2">
           <CardHeader className="pb-4"><CardTitle className="text-xl">Employee Hours for {formatDate(selectedDate)}</CardTitle></CardHeader>
           <CardContent>
@@ -291,9 +243,7 @@ const BulkTimeTracking = () => {
                         <TableCell>
                           <Select value={status} onValueChange={value => updateEmployeeStatus(employee.id, value)} disabled={isFormLoading}>
                             <SelectTrigger className="w-36 text-base"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="present">Present</SelectItem><SelectItem value="absent">Absent</SelectItem><SelectItem value="overtime">Overtime</SelectItem><SelectItem value="holiday">Holiday</SelectItem>
-                            </SelectContent>
+                            <SelectContent><SelectItem value="present">Present</SelectItem><SelectItem value="absent">Absent</SelectItem><SelectItem value="overtime">Overtime</SelectItem><SelectItem value="holiday">Holiday</SelectItem></SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="text-base">₹{employee.salary_per_hour}</TableCell>
