@@ -15,7 +15,6 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
-  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,35 +24,27 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Initialize employee hours when data loads
-  useEffect(() => {
-    if (!employees.length || !workLogs.length) return;
-    
-    const initialHours = employees.reduce((acc, emp) => {
-      const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
-      return {
-        ...acc,
-        [emp.id]: existingLog 
-          ? { hours: existingLog.total_hours, status: existingLog.status }
-          : { hours: 0, status: 'present' }
-      };
-    }, {});
-
-    setEmployeeHours(initialHours);
-  }, [employees, workLogs, selectedDate]);
-
-  // Fetch data when date changes
+  // Fetch work logs when the selected date changes
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
+  // Sync employee hours with the latest work logs and employees
+  useEffect(() => {
+    if (!employees.length || !workLogs.length) return;
+
+    const newHours = {};
+    employees.forEach(emp => {
+      const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+      newHours[emp.id] = log ? { hours: log.total_hours, status: log.status } : { hours: 0, status: 'present' };
+    });
+    setEmployeeHours(newHours);
+  }, [employees, selectedDate, workLogs]);
+
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: { 
-        ...prev[employeeId], 
-        hours: Math.max(0, Math.min(24, hours || 0)) 
-      }
+      [employeeId]: { ...prev[employeeId], hours: Math.max(0, Math.min(24, hours)) } // Ensure hours are between 0 and 24
     }));
   };
 
@@ -69,10 +60,9 @@ const BulkTimeTracking = () => {
       const changes = employees.reduce((acc, emp) => {
         const savedData = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
         const currentData = employeeHours[emp.id];
-        
+
         // Skip if no changes
-        if (savedData?.total_hours === currentData?.hours && 
-            savedData?.status === currentData?.status) {
+        if (savedData?.total_hours === currentData?.hours && savedData?.status === currentData?.status) {
           return acc;
         }
 
@@ -95,52 +85,31 @@ const BulkTimeTracking = () => {
       }
 
       // Process changes in bulk
-      const { data, error } = await supabase.rpc('process_work_logs', {
-        changes: changes
-      });
+      const { data, error } = await supabase.rpc('process_work_logs', { changes });
 
       if (error) throw error;
 
-      await addAdminLog(
-        'BULK_TIME_TRACKING',
-        `Updated ${changes.length} time logs for ${selectedDate}`,
-        admin?.id
-      );
+      await addAdminLog('BULK_TIME_TRACKING', `Updated ${changes.length} time logs for ${selectedDate}`, admin?.id);
 
-      toast({
-        title: "Success",
-        description: `${changes.length} records updated successfully`
-      });
+      toast({ title: "Success", description: `${changes.length} records updated successfully` });
 
       // Refresh data
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
 
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save changes",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to save changes", variant: "destructive" });
     }
   };
 
   const handleCalculateSalary = async () => {
     try {
       if (!salaryStartDate || !salaryEndDate) {
-        toast({
-          title: "Missing Dates",
-          description: "Please select both start and end dates for salary calculation.",
-          variant: "destructive",
-        });
+        toast({ title: "Missing Dates", description: "Please select both start and end dates for salary calculation.", variant: "destructive" });
         return;
       }
 
       if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
-        toast({
-          title: "Invalid Date Range",
-          description: "Start date must be before or equal to end date.",
-          variant: "destructive",
-        });
+        toast({ title: "Invalid Date Range", description: "Start date must be before or equal to end date.", variant: "destructive" });
         return;
       }
 
@@ -185,16 +154,9 @@ const BulkTimeTracking = () => {
       setSalaryResults(calculations);
       setShowSalaryResults(true);
 
-      toast({
-        title: "Salary Calculated",
-        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
-      });
+      toast({ title: "Salary Calculated", description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.` });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to calculate salary",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to calculate salary", variant: "destructive" });
     }
   };
 
