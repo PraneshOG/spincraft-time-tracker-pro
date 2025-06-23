@@ -15,7 +15,6 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
-  const { calculateSalaries } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -27,7 +26,7 @@ const BulkTimeTracking = () => {
 
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-  }, [selectedDate]);
+  }, [selectedDate, fetchWorkLogs]);
 
   useEffect(() => {
     if (!employees.length) return;
@@ -35,7 +34,7 @@ const BulkTimeTracking = () => {
     employees.forEach(emp => {
       const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
       newHours[emp.id] = {
-        hours: log?.total_hours || '',
+        hours: log?.total_hours || 0,
         status: log?.status || 'present'
       };
     });
@@ -63,84 +62,59 @@ const BulkTimeTracking = () => {
   };
 
   const saveAll = async () => {
-    const updates = await Promise.all(
-      employees.map(async emp => {
-        const { hours, status } = employeeHours[emp.id] || {};
-        if (hours === '') return null;
-        const { error } = await supabase
-          .from('work_logs')
-          .upsert({
-            employee_id: emp.id,
-            date: selectedDate,
-            total_hours: parseFloat(hours),
-            status
-          });
-
-        if (error) {
-          toast({
-            title: 'Error saving data',
-            description: `Failed to save for ${emp.name}: ${error.message}`,
-            variant: 'destructive'
-          });
-          return error;
-        }
-
-        return null;
-      })
-    );
-
-    const anyError = updates.some(error => error !== null);
-
-    if (!anyError) {
-      await addAdminLog({
-        action: `Updated hours for ${selectedDate}`,
-        admin_id: admin?.id || 'unknown'
+    const updates = employees.map(async emp => {
+      const log = employeeHours[emp.id];
+      if (!log || log.hours === '') return null;
+      const { error } = await supabase.from('work_logs').upsert({
+        employee_id: emp.id,
+        date: selectedDate,
+        total_hours: parseFloat(log.hours),
+        status: log.status,
+        created_by: admin?.id || 'system'
       });
-
-      toast({
-        title: 'Saved!',
-        description: 'All work logs updated.'
-      });
-    }
+      if (error) {
+        toast({ title: `Failed to save for ${emp.name}`, description: error.message });
+      }
+      return null;
+    });
+    await Promise.all(updates);
+    toast({ title: 'Saved successfully!' });
+    addAdminLog(`Saved time tracking for ${selectedDate}`);
+    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   };
 
-  const calculateSalary = async () => {
-    const { data, error } = await calculateSalaries({
-      startDate: salaryStartDate,
-      endDate: salaryEndDate
-    });
-    if (!error) {
-      setSalaryResults(data);
-      setShowSalaryResults(true);
-    } else {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      });
+  const calculateSalaries = async () => {
+    const { data, error } = await useSalaryCalculations(salaryStartDate, salaryEndDate);
+    if (error) {
+      toast({ title: 'Error calculating salaries', description: error.message });
+      return;
     }
+    setSalaryResults(data);
+    setShowSalaryResults(true);
   };
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" /> Log Hours
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><Calendar size={18} /> Select Date</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-          />
+        <CardContent>
+          <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Save size={18} /> Log Work Hours</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Hours</TableHead>
+                <TableHead>Employee</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Hours</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -148,20 +122,8 @@ const BulkTimeTracking = () => {
                 <TableRow key={emp.id}>
                   <TableCell>{emp.name}</TableCell>
                   <TableCell>
-                    <Input
-                      type="number"
-                      value={employeeHours[emp.id]?.hours || ''}
-                      onChange={e => updateEmployeeHours(emp.id, e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={employeeHours[emp.id]?.status || 'present'}
-                      onValueChange={value => updateEmployeeStatus(emp.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={employeeHours[emp.id]?.status} onValueChange={value => updateEmployeeStatus(emp.id, value)}>
+                      <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="present">Present</SelectItem>
                         <SelectItem value="absent">Absent</SelectItem>
@@ -169,62 +131,57 @@ const BulkTimeTracking = () => {
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={employeeHours[emp.id]?.hours || ''}
+                      onChange={e => updateEmployeeHours(emp.id, e.target.value)}
+                      placeholder="Hours"
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <Button onClick={saveAll} className="mt-4">
-            <Save className="mr-2 h-4 w-4" /> Save All
-          </Button>
+          <Button className="mt-4" onClick={saveAll}>Save All</Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="w-5 h-5" /> Calculate Salary
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><Calculator size={18} /> Calculate Salary</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-4">
-            <div className="flex flex-col w-full">
+            <div>
               <Label>Start Date</Label>
-              <Input
-                type="date"
-                value={salaryStartDate}
-                onChange={e => setSalaryStartDate(e.target.value)}
-              />
+              <Input type="date" value={salaryStartDate} onChange={e => setSalaryStartDate(e.target.value)} />
             </div>
-            <div className="flex flex-col w-full">
+            <div>
               <Label>End Date</Label>
-              <Input
-                type="date"
-                value={salaryEndDate}
-                onChange={e => setSalaryEndDate(e.target.value)}
-              />
+              <Input type="date" value={salaryEndDate} onChange={e => setSalaryEndDate(e.target.value)} />
             </div>
           </div>
-          <Button onClick={calculateSalary}>
-            <DollarSign className="mr-2 h-4 w-4" /> Calculate
-          </Button>
-
+          <Button onClick={calculateSalaries}><DollarSign size={16} className="mr-2" /> Calculate</Button>
           {showSalaryResults && (
-            <div className="mt-4">
-              <h4 className="text-lg font-semibold mb-2">Salary Results</h4>
+            <div>
+              <h3 className="font-semibold mt-4">Salary Results</h3>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Employee</TableHead>
                     <TableHead>Total Hours</TableHead>
+                    <TableHead>Rate</TableHead>
                     <TableHead>Salary</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salaryResults.map(result => (
                     <TableRow key={result.employee_id}>
-                      <TableCell>{result.name}</TableCell>
+                      <TableCell>{result.employee_name}</TableCell>
                       <TableCell>{result.total_hours}</TableCell>
-                      <TableCell>₹{result.salary}</TableCell>
+                      <TableCell>{result.hourly_rate}</TableCell>
+                      <TableCell>₹{result.total_salary}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
