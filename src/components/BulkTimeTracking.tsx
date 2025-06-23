@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
-import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
+import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,48 +23,67 @@ const BulkTimeTracking = () => {
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
+  
+  // State to track the last date we synced the form data for.
+  const [lastSyncedDate, setLastSyncedDate] = useState(null);
 
   // Fetch work logs whenever the selected date changes
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
-  // Sync employee hours with the latest work logs and employees
+  // This is the corrected effect. It now only syncs the form when the date changes.
   useEffect(() => {
-    if (!employees.length || !workLogs.length) return; // Ensure both employees and workLogs are available
-    const newHours = {};
-    employees.forEach(emp => {
-      const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
-      if (log) {
-        newHours[emp.id] = { hours: log.total_hours, status: log.status };
-      } else {
-        newHours[emp.id] = { hours: 0, status: 'present' };
-      }
-    });
-    setEmployeeHours(newHours);
-  }, [employees, selectedDate, workLogs]);
+    // We only want to re-populate the form if the selectedDate is different from the one we last synced.
+    // This prevents user input from being overwritten on every re-render.
+    if (selectedDate !== lastSyncedDate) {
+      // Wait for employees to be loaded.
+      if (!employees.length) return;
+
+      const newHours = {};
+      employees.forEach(emp => {
+        const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+        if (log) {
+          newHours[emp.id] = { hours: log.total_hours, status: log.status };
+        } else {
+          // If no log exists for the date, default to 0 hours.
+          newHours[emp.id] = { hours: 0, status: 'present' };
+        }
+      });
+      setEmployeeHours(newHours);
+      // Mark that we have successfully synced the form for the current selectedDate.
+      setLastSyncedDate(selectedDate);
+    }
+  }, [employees, selectedDate, workLogs, lastSyncedDate]);
+
 
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: { ...prev[employeeId], hours }
+      [employeeId]: { ...(prev[employeeId] || { status: 'present' }), hours }
     }));
   };
 
   const updateEmployeeStatus = (employeeId, status) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: { ...prev[employeeId], status }
+      [employeeId]: { ...(prev[employeeId] || { hours: 0 }), status }
     }));
   };
 
   const handleSaveAll = async () => {
     try {
-      const changedEmployees = employees.filter(emp =>
-        employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
-      );
+      // Filter for employees whose data has actually changed.
+      const changedEntries = Object.entries(employeeHours).filter(([empId, data]) => {
+        const originalLog = workLogs.find(l => l.employee_id === empId && l.date === selectedDate);
+        if (originalLog) {
+          return originalLog.total_hours !== data.hours || originalLog.status !== data.status;
+        }
+        // If there was no original log, save if hours are > 0 or status is not default 'present'.
+        return data.hours > 0 || data.status !== 'present';
+      });
 
-      if (changedEmployees.length === 0) {
+      if (changedEntries.length === 0) {
         toast({
           title: "No Changes",
           description: "No hours or status changes to save.",
@@ -75,15 +94,15 @@ const BulkTimeTracking = () => {
       let updatedCount = 0;
       let insertedCount = 0;
 
-      for (const emp of changedEmployees) {
+      for (const [employeeId, data] of changedEntries) {
         const existingLog = workLogs.find(
-          log => log.employee_id === emp.id && log.date === selectedDate
+          log => log.employee_id === employeeId && log.date === selectedDate
         );
         const logData = {
-          employee_id: emp.id,
+          employee_id: employeeId,
           date: selectedDate,
-          total_hours: employeeHours[emp.id]?.hours || 0,
-          status: employeeHours[emp.id]?.status || 'present',
+          total_hours: data.hours || 0,
+          status: data.status || 'present',
           created_by: admin?.id || 'admin'
         };
         if (existingLog) {
@@ -117,18 +136,19 @@ const BulkTimeTracking = () => {
         description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
 
-      // Refetch work logs to keep the workLogs array up to date
+      // Refetch work logs to keep the local data consistent with the database.
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save time logs",
+        description: "Failed to save time logs: " + error.message,
         variant: "destructive",
       });
     }
   };
 
   const handleCalculateSalary = async () => {
+    // ... (rest of the function is unchanged)
     try {
       if (!salaryStartDate || !salaryEndDate) {
         toast({
@@ -148,7 +168,7 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      const { data: workLogs, error } = await supabase
+      const { data: workLogsForSalary, error } = await supabase
         .from('work_logs')
         .select(`
           *,
@@ -164,7 +184,7 @@ const BulkTimeTracking = () => {
 
       if (error) throw error;
 
-      const employeeTotals = workLogs?.reduce((acc, log) => {
+      const employeeTotals = workLogsForSalary?.reduce((acc, log) => {
         const empId = log.employee_id;
         if (!acc[empId]) {
           acc[empId] = {
@@ -196,13 +216,14 @@ const BulkTimeTracking = () => {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to calculate salary",
+        description: "Failed to calculate salary: " + error.message,
         variant: "destructive",
       });
     }
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'long',
@@ -210,8 +231,10 @@ const BulkTimeTracking = () => {
     });
   };
 
+  // ... (JSX is unchanged)
+
   return (
-    <div className="space-y-6 p-6">
+     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
