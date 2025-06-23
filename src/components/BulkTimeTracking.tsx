@@ -15,7 +15,6 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
-  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,14 +24,14 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Always fetch logs when date changes
+  // Fetch work logs whenever the selected date changes
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
-  // Always sync employeeHours with latest workLogs and employees
+  // Sync employee hours with the latest work logs and employees
   useEffect(() => {
-    if (!employees.length) return;
+    if (!employees.length || !workLogs.length) return; // Ensure both employees and workLogs are available
     const newHours = {};
     employees.forEach(emp => {
       const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
@@ -118,7 +117,7 @@ const BulkTimeTracking = () => {
         description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
       });
 
-      // Refetch work logs (to keep the workLogs array up to date)
+      // Refetch work logs to keep the workLogs array up to date
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
     } catch (error) {
       toast({
