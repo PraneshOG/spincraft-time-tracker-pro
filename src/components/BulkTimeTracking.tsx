@@ -24,19 +24,22 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
+  // Fetch work logs whenever the selected date changes
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
+  // Sync employee hours with the latest work logs and employees
   useEffect(() => {
-    if (!employees.length) return;
+    if (!employees.length || !workLogs.length) return; // Ensure both employees and workLogs are available
     const newHours = {};
     employees.forEach(emp => {
       const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
-      newHours[emp.id] = {
-        hours: log?.total_hours || 0,
-        status: log?.status || 'present'
-      };
+      if (log) {
+        newHours[emp.id] = { hours: log.total_hours, status: log.status };
+      } else {
+        newHours[emp.id] = { hours: 0, status: 'present' };
+      }
     });
     setEmployeeHours(newHours);
   }, [employees, selectedDate, workLogs]);
@@ -44,152 +47,345 @@ const BulkTimeTracking = () => {
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: {
-        hours,
-        status: prev[employeeId]?.status || 'present'
-      }
+      [employeeId]: { ...prev[employeeId], hours }
     }));
   };
 
   const updateEmployeeStatus = (employeeId, status) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: {
-        hours: prev[employeeId]?.hours || 0,
-        status
-      }
+      [employeeId]: { ...prev[employeeId], status }
     }));
   };
 
-  const saveAll = async () => {
-    const updates = employees.map(async emp => {
-      const log = employeeHours[emp.id];
-      if (!log || log.hours === '') return null;
-      const { error } = await supabase.from('work_logs').upsert({
-        employee_id: emp.id,
-        date: selectedDate,
-        total_hours: parseFloat(log.hours),
-        status: log.status,
-        created_by: admin?.id || 'system'
-      });
-      if (error) {
-        toast({ title: `Failed to save for ${emp.name}`, description: error.message });
+  const handleSaveAll = async () => {
+    try {
+      const changedEmployees = employees.filter(emp =>
+        employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
+      );
+
+      if (changedEmployees.length === 0) {
+        toast({
+          title: "No Changes",
+          description: "No hours or status changes to save.",
+        });
+        return;
       }
-      return null;
-    });
-    await Promise.all(updates);
-    toast({ title: 'Saved successfully!' });
-    addAdminLog(`Saved time tracking for ${selectedDate}`);
-    fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+
+      let updatedCount = 0;
+      let insertedCount = 0;
+
+      for (const emp of changedEmployees) {
+        const existingLog = workLogs.find(
+          log => log.employee_id === emp.id && log.date === selectedDate
+        );
+        const logData = {
+          employee_id: emp.id,
+          date: selectedDate,
+          total_hours: employeeHours[emp.id]?.hours || 0,
+          status: employeeHours[emp.id]?.status || 'present',
+          created_by: admin?.id || 'admin'
+        };
+        if (existingLog) {
+          const { error } = await supabase
+            .from('work_logs')
+            .update({
+              total_hours: logData.total_hours,
+              status: logData.status,
+              created_by: logData.created_by
+            })
+            .eq('id', existingLog.id);
+          if (error) throw error;
+          updatedCount++;
+        } else {
+          const { error } = await supabase
+            .from('work_logs')
+            .insert([logData]);
+          if (error) throw error;
+          insertedCount++;
+        }
+      }
+
+      await addAdminLog(
+        'BULK_TIME_TRACKING',
+        `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`,
+        admin?.id || 'admin'
+      );
+
+      toast({
+        title: "Time Logs Saved",
+        description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
+      });
+
+      // Refetch work logs to keep the workLogs array up to date
+      fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save time logs",
+        variant: "destructive",
+      });
+    }
   };
 
-  const calculateSalaries = async () => {
-    const { data, error } = await useSalaryCalculations(salaryStartDate, salaryEndDate);
-    if (error) {
-      toast({ title: 'Error calculating salaries', description: error.message });
-      return;
+  const handleCalculateSalary = async () => {
+    try {
+      if (!salaryStartDate || !salaryEndDate) {
+        toast({
+          title: "Missing Dates",
+          description: "Please select both start and end dates for salary calculation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
+        toast({
+          title: "Invalid Date Range",
+          description: "Start date must be before or equal to end date.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: workLogs, error } = await supabase
+        .from('work_logs')
+        .select(`
+          *,
+          employees (
+            id,
+            name,
+            salary_per_hour
+          )
+        `)
+        .gte('date', salaryStartDate)
+        .lte('date', salaryEndDate)
+        .eq('status', 'present');
+
+      if (error) throw error;
+
+      const employeeTotals = workLogs?.reduce((acc, log) => {
+        const empId = log.employee_id;
+        if (!acc[empId]) {
+          acc[empId] = {
+            employee_id: empId,
+            employee_name: log.employees?.name || 'Unknown',
+            total_hours: 0,
+            hourly_rate: log.employees?.salary_per_hour || 0
+          };
+        }
+        acc[empId].total_hours += log.total_hours;
+        return acc;
+      }, {});
+
+      const calculations = Object.values(employeeTotals || {}).map(emp => ({
+        employee_id: emp.employee_id,
+        employee_name: emp.employee_name,
+        total_hours: emp.total_hours,
+        hourly_rate: emp.hourly_rate,
+        total_salary: emp.total_hours * emp.hourly_rate
+      }));
+
+      setSalaryResults(calculations);
+      setShowSalaryResults(true);
+
+      toast({
+        title: "Salary Calculated",
+        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to calculate salary",
+        variant: "destructive",
+      });
     }
-    setSalaryResults(data);
-    setShowSalaryResults(true);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Calendar size={18} /> Select Date</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Save size={18} /> Log Work Hours</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Hours</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employees.map(emp => (
-                <TableRow key={emp.id}>
-                  <TableCell>{emp.name}</TableCell>
-                  <TableCell>
-                    <Select value={employeeHours[emp.id]?.status} onValueChange={value => updateEmployeeStatus(emp.id, value)}>
-                      <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="absent">Absent</SelectItem>
-                        <SelectItem value="leave">Leave</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      value={employeeHours[emp.id]?.hours || ''}
-                      onChange={e => updateEmployeeHours(emp.id, e.target.value)}
-                      placeholder="Hours"
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <Button className="mt-4" onClick={saveAll}>Save All</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Calculator size={18} /> Calculate Salary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-4">
-            <div>
-              <Label>Start Date</Label>
-              <Input type="date" value={salaryStartDate} onChange={e => setSalaryStartDate(e.target.value)} />
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-6">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
+          <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
+        </div>
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <Calendar className="w-6 h-6" />
+              Select Date
+            </CardTitle>
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="date" className="text-base font-medium">Date:</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <Button onClick={handleSaveAll} size="lg" className="ml-auto">
+                <Save className="w-5 h-5 mr-2" />
+                Save All
+              </Button>
             </div>
-            <div>
-              <Label>End Date</Label>
-              <Input type="date" value={salaryEndDate} onChange={e => setSalaryEndDate(e.target.value)} />
+          </CardHeader>
+        </Card>
+
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <DollarSign className="w-6 h-6" />
+              Salary Calculation
+            </CardTitle>
+            <div className="flex gap-6 items-center flex-wrap">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-start-date" className="text-base font-medium">From:</Label>
+                <Input
+                  id="salary-start-date"
+                  type="date"
+                  value={salaryStartDate}
+                  onChange={e => setSalaryStartDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="salary-end-date" className="text-base font-medium">To:</Label>
+                <Input
+                  id="salary-end-date"
+                  type="date"
+                  value={salaryEndDate}
+                  onChange={e => setSalaryEndDate(e.target.value)}
+                  className="w-auto min-w-48 text-base"
+                />
+              </div>
+              <Button onClick={handleCalculateSalary} variant="outline" size="lg">
+                <Calculator className="w-5 h-5 mr-2" />
+                Calculate Salary
+              </Button>
             </div>
-          </div>
-          <Button onClick={calculateSalaries}><DollarSign size={16} className="mr-2" /> Calculate</Button>
-          {showSalaryResults && (
-            <div>
-              <h3 className="font-semibold mt-4">Salary Results</h3>
+          </CardHeader>
+        </Card>
+
+        {showSalaryResults && salaryResults.length > 0 && (
+          <Card className="border-4 border-green-300 bg-green-50/70">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-green-800 text-2xl">💰 Salary Calculation Results</CardTitle>
+              <p className="text-muted-foreground text-lg">
+                Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="font-bold text-base">Employee Name</TableHead>
+                      <TableHead className="font-bold text-base">Total Hours</TableHead>
+                      <TableHead className="font-bold text-base">Hourly Rate</TableHead>
+                      <TableHead className="font-bold text-base">Total Salary</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {salaryResults.map((result, index) => (
+                      <TableRow key={index} className="hover:bg-green-100/50">
+                        <TableCell className="font-medium text-base">{result.employee_name}</TableCell>
+                        <TableCell className="text-center text-base">{result.total_hours} hours</TableCell>
+                        <TableCell className="text-center text-base">₹{result.hourly_rate}</TableCell>
+                        <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="mt-8 p-6 bg-green-100 border-2 border-green-400 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-semibold text-green-800">Grand Total Amount:</span>
+                    <span className="text-3xl font-bold text-green-800">
+                      ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-base text-green-600 mt-3">
+                    Total employees: {salaryResults.length} | Total hours: {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl">Employee Hours for {formatDate(selectedDate)}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Total Hours</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Salary</TableHead>
+                    <TableHead className="font-bold text-base">Employee</TableHead>
+                    <TableHead className="font-bold text-base">Hours</TableHead>
+                    <TableHead className="font-bold text-base">Status</TableHead>
+                    <TableHead className="font-bold text-base">Hourly Rate</TableHead>
+                    <TableHead className="font-bold text-base">Total Pay</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {salaryResults.map(result => (
-                    <TableRow key={result.employee_id}>
-                      <TableCell>{result.employee_name}</TableCell>
-                      <TableCell>{result.total_hours}</TableCell>
-                      <TableCell>{result.hourly_rate}</TableCell>
-                      <TableCell>₹{result.total_salary}</TableCell>
-                    </TableRow>
-                  ))}
+                  {employees.map(employee => {
+                    const hours = employeeHours[employee.id]?.hours || 0;
+                    const status = employeeHours[employee.id]?.status || 'present';
+                    const totalPay = hours * (employee.salary_per_hour || 0);
+
+                    return (
+                      <TableRow key={employee.id} className="hover:bg-accent/50">
+                        <TableCell className="font-medium text-base">{employee.name}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="24"
+                            value={hours}
+                            onChange={e => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
+                            className="w-24 text-base"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={status}
+                            onValueChange={value => updateEmployeeStatus(employee.id, value)}
+                          >
+                            <SelectTrigger className="w-36 text-base">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="present">Present</SelectItem>
+                              <SelectItem value="absent">Absent</SelectItem>
+                              <SelectItem value="overtime">Overtime</SelectItem>
+                              <SelectItem value="holiday">Holiday</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-base">₹{employee.salary_per_hour}</TableCell>
+                        <TableCell className="font-semibold text-base">₹{totalPay.toFixed(2)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
