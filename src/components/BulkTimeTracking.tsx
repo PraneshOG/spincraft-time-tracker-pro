@@ -75,19 +75,33 @@ const BulkTimeTracking = () => {
             total_hours: parseFloat(hours),
             status
           });
-        return error;
+
+        if (error) {
+          toast({
+            title: 'Error saving data',
+            description: `Failed to save for ${emp.name}: ${error.message}`,
+            variant: 'destructive'
+          });
+          return error;
+        }
+
+        return null;
       })
     );
 
-    await addAdminLog({
-      action: `Updated hours for ${selectedDate}`,
-      admin_id: admin?.id || 'unknown'
-    });
+    const anyError = updates.some(error => error !== null);
 
-    toast({
-      title: 'Saved!',
-      description: 'All work logs updated.'
-    });
+    if (!anyError) {
+      await addAdminLog({
+        action: `Updated hours for ${selectedDate}`,
+        admin_id: admin?.id || 'unknown'
+      });
+
+      toast({
+        title: 'Saved!',
+        description: 'All work logs updated.'
+      });
+    }
   };
 
   const calculateSalary = async () => {
@@ -98,6 +112,12 @@ const BulkTimeTracking = () => {
     if (!error) {
       setSalaryResults(data);
       setShowSalaryResults(true);
+    } else {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive'
+      });
     }
   };
 
