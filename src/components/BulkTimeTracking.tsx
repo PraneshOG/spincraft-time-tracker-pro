@@ -15,6 +15,7 @@ const BulkTimeTracking = () => {
   const { employees } = useEmployees();
   const { workLogs, fetchWorkLogs } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
+  const { calculateSalaryForPeriod } = useSalaryCalculations();
   const { admin } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -24,30 +25,35 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
 
-  // Fetch work logs whenever the selected date changes
+  // Initialize employee hours when data loads
+  useEffect(() => {
+    if (!employees.length || !workLogs.length) return;
+    
+    const initialHours = employees.reduce((acc, emp) => {
+      const existingLog = workLogs.find(log => log.employee_id === emp.id && log.date === selectedDate);
+      return {
+        ...acc,
+        [emp.id]: existingLog 
+          ? { hours: existingLog.total_hours, status: existingLog.status }
+          : { hours: 0, status: 'present' }
+      };
+    }, {});
+
+    setEmployeeHours(initialHours);
+  }, [employees, workLogs, selectedDate]);
+
+  // Fetch data when date changes
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
   }, [selectedDate, fetchWorkLogs]);
 
-  // Sync employee hours with the latest work logs and employees
-  useEffect(() => {
-    if (!employees.length || !workLogs.length) return; // Ensure both employees and workLogs are available
-    const newHours = {};
-    employees.forEach(emp => {
-      const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
-      if (log) {
-        newHours[emp.id] = { hours: log.total_hours, status: log.status };
-      } else {
-        newHours[emp.id] = { hours: 0, status: 'present' };
-      }
-    });
-    setEmployeeHours(newHours);
-  }, [employees, selectedDate, workLogs]);
-
   const updateEmployeeHours = (employeeId, hours) => {
     setEmployeeHours(prev => ({
       ...prev,
-      [employeeId]: { ...prev[employeeId], hours }
+      [employeeId]: { 
+        ...prev[employeeId], 
+        hours: Math.max(0, Math.min(24, hours || 0)) 
+      }
     }));
   };
 
@@ -60,70 +66,60 @@ const BulkTimeTracking = () => {
 
   const handleSaveAll = async () => {
     try {
-      const changedEmployees = employees.filter(emp =>
-        employeeHours[emp.id]?.hours > 0 || employeeHours[emp.id]?.status !== 'present'
-      );
+      const changes = employees.reduce((acc, emp) => {
+        const savedData = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
+        const currentData = employeeHours[emp.id];
+        
+        // Skip if no changes
+        if (savedData?.total_hours === currentData?.hours && 
+            savedData?.status === currentData?.status) {
+          return acc;
+        }
 
-      if (changedEmployees.length === 0) {
-        toast({
-          title: "No Changes",
-          description: "No hours or status changes to save.",
-        });
+        return [
+          ...acc,
+          {
+            employee_id: emp.id,
+            date: selectedDate,
+            total_hours: currentData?.hours || 0,
+            status: currentData?.status || 'present',
+            created_by: admin?.id || 'admin',
+            existingLogId: savedData?.id
+          }
+        ];
+      }, []);
+
+      if (changes.length === 0) {
+        toast({ title: "No Changes", description: "No hours or status changes to save." });
         return;
       }
 
-      let updatedCount = 0;
-      let insertedCount = 0;
+      // Process changes in bulk
+      const { data, error } = await supabase.rpc('process_work_logs', {
+        changes: changes
+      });
 
-      for (const emp of changedEmployees) {
-        const existingLog = workLogs.find(
-          log => log.employee_id === emp.id && log.date === selectedDate
-        );
-        const logData = {
-          employee_id: emp.id,
-          date: selectedDate,
-          total_hours: employeeHours[emp.id]?.hours || 0,
-          status: employeeHours[emp.id]?.status || 'present',
-          created_by: admin?.id || 'admin'
-        };
-        if (existingLog) {
-          const { error } = await supabase
-            .from('work_logs')
-            .update({
-              total_hours: logData.total_hours,
-              status: logData.status,
-              created_by: logData.created_by
-            })
-            .eq('id', existingLog.id);
-          if (error) throw error;
-          updatedCount++;
-        } else {
-          const { error } = await supabase
-            .from('work_logs')
-            .insert([logData]);
-          if (error) throw error;
-          insertedCount++;
-        }
-      }
+      if (error) throw error;
 
       await addAdminLog(
         'BULK_TIME_TRACKING',
-        `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`,
-        admin?.id || 'admin'
+        `Updated ${changes.length} time logs for ${selectedDate}`,
+        admin?.id
       );
 
       toast({
-        title: "Time Logs Saved",
-        description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
+        title: "Success",
+        description: `${changes.length} records updated successfully`
       });
 
-      // Refetch work logs to keep the workLogs array up to date
+      // Refresh data
       fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save time logs",
-        variant: "destructive",
+        description: error.message || "Failed to save changes",
+        variant: "destructive"
       });
     }
   };
@@ -217,6 +213,7 @@ const BulkTimeTracking = () => {
           <h1 className="text-3xl font-bold text-foreground">Bulk Time Tracking</h1>
           <p className="text-lg text-muted-foreground">Log hours for all employees at once</p>
         </div>
+        
         <Card className="border-2">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl">
