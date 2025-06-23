@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
-import { useEmployees, useWorkLogs, useAdminLogs, useSalaryCalculations } from '@/hooks/useSupabaseData';
+import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,6 +42,7 @@ const BulkTimeTracking = () => {
   }, [employees, selectedDate, workLogs]);
 
   const updateEmployeeHours = (employeeId, hours) => {
+    // Update the hours in the state
     setEmployeeHours(prev => ({
       ...prev,
       [employeeId]: { ...prev[employeeId], hours: Math.max(0, Math.min(24, hours)) } // Ensure hours are between 0 and 24
