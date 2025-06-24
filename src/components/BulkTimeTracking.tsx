@@ -23,22 +23,23 @@ const BulkTimeTracking = () => {
     const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [salaryResults, setSalaryResults] = useState([]);
     const [showSalaryResults, setShowSalaryResults] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const [loading, setLoading] = useState(false);  // Added loading state
-
-
+    // 1. Fetch Work Logs on Date Change
     useEffect(() => {
         const fetchData = async () => {
-            setLoading(true); // Start loading
+            setLoading(true);
             await fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
-            setLoading(false); // Stop loading
+            setLoading(false);
         };
 
         fetchData();
     }, [selectedDate, fetchWorkLogs]);
 
+
+    // 2. Initialize Employee Hours *after* employees and workLogs are loaded
     useEffect(() => {
-        if (!employees.length) return;
+        if (!employees.length || loading) return; // Wait for employees and stop if still loading
 
         const initialEmployeeHours = {};
         employees.forEach(employee => {
@@ -47,21 +48,21 @@ const BulkTimeTracking = () => {
             );
 
             if (workLog) {
+                // Data exists in database
                 initialEmployeeHours[employee.id] = {
                     hours: workLog.total_hours,
                     status: workLog.status
                 };
             } else {
+                // No data in database - initialize to empty hour with default status
                 initialEmployeeHours[employee.id] = {
-                    hours: '',
+                    hours: '', // Initialize to empty string
                     status: 'present'
                 };
             }
         });
-
         setEmployeeHours(initialEmployeeHours);
-
-    }, [employees, selectedDate, workLogs]);
+    }, [employees, selectedDate, workLogs, loading]);
 
 
     const updateEmployeeHours = (employeeId, hours) => {
@@ -87,8 +88,9 @@ const BulkTimeTracking = () => {
                     );
 
                     if (!originalLog && data.hours === '' && data.status === 'present') {
-                        return false; // Skip if no log exists and no data has been entered.
+                        return false;
                     }
+
                     if (originalLog) {
                         return (
                             originalLog.total_hours !== data.hours || originalLog.status !== data.status
@@ -413,11 +415,11 @@ const BulkTimeTracking = () => {
                                     <TableBody>
                                         {employees.map((employee) => {
                                             const employeeData = employeeHours[employee.id];
-                                            const hours = employeeData ? employeeData.hours : '';
+                                            const hours = employeeData ? employeeData.hours : ''; // Ensure it works with undefined
+
                                             const status = employeeData ? employeeData.status : 'present';
                                             const totalPay = (hours || 0) * (employee.salary_per_hour || 0);
 
+
                                             return (
-                                                <TableRow key={employee.id} className="hover:bg-accent/50">
-                                                    <TableCell className="font-medium text-base">{employee.name}</TableCell>
-                                                    <TableCe
+                         
