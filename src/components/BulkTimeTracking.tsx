@@ -34,191 +34,217 @@ const BulkTimeTracking = () => {
 
   // This is the corrected effect. It now only syncs the form when the date changes.
   useEffect(() => {
-    // We only want to re-populate the form if the selectedDate is different from the one we last synced.
-    // This prevents user input from being overwritten on every re-render.
     if (selectedDate !== lastSyncedDate) {
-      // Wait for employees to be loaded.
       if (!employees.length) return;
 
-      const newHours = {};
-      employees.forEach(emp => {
-        const log = workLogs.find(l => l.employee_id === emp.id && l.date === selectedDate);
-        if (log) {
-          newHours[emp.id] = { hours: log.total_hours, status: log.status };
-        } else {
-          // If no log exists for the date, default to 0 hours.
-          newHours[emp.id] = { hours: 0, status: 'present' };
+      const initialEmployeeHours = {};
+      employees.forEach((employee) => {
+        const workLog = workLogs.find(
+          (log) => log.employee_id === employee.id && log.date === selectedDate
+        );
+
+        if (workLog) {
+          initialEmployeeHours[employee.id] = {
+            hours: workLog.total_hours,
+            status: workLog.status,
+          };
         }
       });
-      setEmployeeHours(newHours);
-      // Mark that we have successfully synced the form for the current selectedDate.
+      setEmployeeHours(initialEmployeeHours);
       setLastSyncedDate(selectedDate);
     }
   }, [employees, selectedDate, workLogs, lastSyncedDate]);
 
 
   const updateEmployeeHours = (employeeId, hours) => {
-    setEmployeeHours(prev => ({
-      ...prev,
-      [employeeId]: { ...(prev[employeeId] || { status: 'present' }), hours }
+    setEmployeeHours((prevEmployeeHours) => ({
+      ...prevEmployeeHours,
+      [employeeId]: {
+        ...((prevEmployeeHours && prevEmployeeHours[employeeId]) || { status: 'present' }),
+        hours,
+      },
     }));
   };
 
   const updateEmployeeStatus = (employeeId, status) => {
-    setEmployeeHours(prev => ({
-      ...prev,
-      [employeeId]: { ...(prev[employeeId] || { hours: 0 }), status }
+    setEmployeeHours((prevEmployeeHours) => ({
+      ...prevEmployeeHours,
+      [employeeId]: {
+        ...((prevEmployeeHours && prevEmployeeHours[employeeId]) || { hours: 0 }),
+        status,
+      },
     }));
   };
 
   const handleSaveAll = async () => {
     try {
-      // Filter for employees whose data has actually changed.
-      const changedEntries = Object.entries(employeeHours).filter(([empId, data]) => {
-        const originalLog = workLogs.find(l => l.employee_id === empId && l.date === selectedDate);
-        if (originalLog) {
-          return originalLog.total_hours !== data.hours || originalLog.status !== data.status;
-        }
-        // If there was no original log, save if hours are > 0 or status is not default 'present'.
-        return data.hours > 0 || data.status !== 'present';
-      });
+      const updates = Object.entries(employeeHours)
+        .filter(([employeeId, data]) => {
+          const originalLog = workLogs.find(
+            (log) => log.employee_id === employeeId && log.date === selectedDate
+          );
+          if (originalLog) {
+            return (
+              originalLog.total_hours !== data.hours || originalLog.status !== data.status
+            );
+          } else {
+            return data.hours > 0 || data.status !== 'present';
+          }
+        })
+        .map(([employeeId, data]) => ({
+          employee_id: employeeId,
+          date: selectedDate,
+          total_hours: data.hours,
+          status: data.status,
+        }));
 
-      if (changedEntries.length === 0) {
-        toast({
-          title: "No Changes",
-          description: "No hours or status changes to save.",
-        });
+      if (updates.length === 0) {
+        toast({ title: 'No changes to save.' });
         return;
       }
 
-      let updatedCount = 0;
       let insertedCount = 0;
+      let updatedCount = 0;
 
-      for (const [employeeId, data] of changedEntries) {
+      for (const update of updates) {
         const existingLog = workLogs.find(
-          log => log.employee_id === employeeId && log.date === selectedDate
+          (log) => log.employee_id === update.employee_id && log.date === selectedDate
         );
-        const logData = {
-          employee_id: employeeId,
-          date: selectedDate,
-          total_hours: data.hours || 0,
-          status: data.status || 'present',
-          created_by: admin?.id || 'admin'
-        };
+
         if (existingLog) {
           const { error } = await supabase
             .from('work_logs')
             .update({
-              total_hours: logData.total_hours,
-              status: logData.status,
-              created_by: logData.created_by
+              total_hours: update.total_hours,
+              status: update.status,
+              created_by: admin?.id || 'admin',
             })
             .eq('id', existingLog.id);
-          if (error) throw error;
+
+          if (error) {
+            console.error('Error updating work log:', error);
+            throw new Error(`Failed to update work log: ${error.message}`);
+          }
           updatedCount++;
         } else {
-          const { error } = await supabase
-            .from('work_logs')
-            .insert([logData]);
-          if (error) throw error;
+          const { error } = await supabase.from('work_logs').insert([
+            {
+              employee_id: update.employee_id,
+              date: update.date,
+              total_hours: update.total_hours,
+              status: update.status,
+              created_by: admin?.id || 'admin',
+            },
+          ]);
+
+          if (error) {
+            console.error('Error inserting work log:', error);
+            throw new Error(`Failed to insert work log: ${error.message}`);
+          }
           insertedCount++;
         }
       }
 
       await addAdminLog(
         'BULK_TIME_TRACKING',
-        `Updated ${updatedCount} and added ${insertedCount} time logs for ${selectedDate}`,
+        `Updated ${updatedCount} and inserted ${insertedCount} time logs for ${selectedDate}`,
         admin?.id || 'admin'
       );
 
       toast({
-        title: "Time Logs Saved",
-        description: `Updated ${updatedCount} and added ${insertedCount} time logs.`,
+        title: 'Success',
+        description: `Updated ${updatedCount} and inserted ${insertedCount} work logs.`,
       });
-
-      // Refetch work logs to keep the local data consistent with the database.
-      fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
+      fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate }); // Refresh data
     } catch (error) {
+      console.error('Error saving work logs:', error);
       toast({
-        title: "Error",
-        description: "Failed to save time logs: " + error.message,
-        variant: "destructive",
+        title: 'Error',
+        description: `Failed to save work logs: ${error.message}`,
+        variant: 'destructive',
       });
     }
   };
 
   const handleCalculateSalary = async () => {
-    // ... (rest of the function is unchanged)
+    if (!salaryStartDate || !salaryEndDate) {
+      toast({ title: 'Error', description: 'Please select both start and end dates.' });
+      return;
+    }
+
+    if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
+      toast({ title: 'Error', description: 'Start date must be before or equal to end date.' });
+      return;
+    }
+
     try {
-      if (!salaryStartDate || !salaryEndDate) {
-        toast({
-          title: "Missing Dates",
-          description: "Please select both start and end dates for salary calculation.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (new Date(salaryStartDate) > new Date(salaryEndDate)) {
-        toast({
-          title: "Invalid Date Range",
-          description: "Start date must be before or equal to end date.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const { data: workLogsForSalary, error } = await supabase
         .from('work_logs')
-        .select(`
-          *,
-          employees (
-            id,
-            name,
-            salary_per_hour
-          )
-        `)
+        .select(
+          `
+            *,
+            employees (
+              id,
+              name,
+              salary_per_hour
+            )
+          `
+        )
         .gte('date', salaryStartDate)
-        .lte('date', salaryEndDate)
-        .eq('status', 'present');
+        .lte('date', salaryEndDate);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching work logs for salary calculation:', error);
+        toast({ title: 'Error', description: 'Failed to fetch work logs.' });
+        return;
+      }
 
-      const employeeTotals = workLogsForSalary?.reduce((acc, log) => {
-        const empId = log.employee_id;
-        if (!acc[empId]) {
-          acc[empId] = {
-            employee_id: empId,
-            employee_name: log.employees?.name || 'Unknown',
+      if (!workLogsForSalary || workLogsForSalary.length === 0) {
+        toast({ title: 'No data', description: 'No work logs found for the selected period.' });
+        setSalaryResults([]);
+        setShowSalaryResults(true);
+        return;
+      }
+
+      const employeeTotals = workLogsForSalary.reduce((acc, log) => {
+        if (log.employees === null) {
+          console.warn(`Employee data is missing for log ID: ${log.id}. Skipping.`);
+          return acc;
+        }
+
+        const employeeId = log.employee_id;
+        if (!acc[employeeId]) {
+          acc[employeeId] = {
+            employee_id: employeeId,
+            employee_name: log.employees.name,
             total_hours: 0,
-            hourly_rate: log.employees?.salary_per_hour || 0
+            salary_per_hour: log.employees.salary_per_hour,
           };
         }
-        acc[empId].total_hours += log.total_hours;
+        acc[employeeId].total_hours += log.total_hours;
         return acc;
       }, {});
 
-      const calculations = Object.values(employeeTotals || {}).map(emp => ({
-        employee_id: emp.employee_id,
-        employee_name: emp.employee_name,
-        total_hours: emp.total_hours,
-        hourly_rate: emp.hourly_rate,
-        total_salary: emp.total_hours * emp.hourly_rate
+      const calculations = Object.values(employeeTotals).map((employee) => ({
+        employee_id: employee.employee_id,
+        employee_name: employee.employee_name,
+        total_hours: employee.total_hours,
+        salary_per_hour: employee.salary_per_hour,
+        total_salary: employee.total_hours * employee.salary_per_hour,
       }));
 
       setSalaryResults(calculations);
       setShowSalaryResults(true);
 
       toast({
-        title: "Salary Calculated",
-        description: `Calculated salary for ${calculations.length} employees from ${formatDate(salaryStartDate)} to ${formatDate(salaryEndDate)}.`,
+        title: 'Salary Calculated',
+        description: `Calculated salary for ${calculations.length} employees from ${formatDate(
+          salaryStartDate
+        )} to ${formatDate(salaryEndDate)}.`,
       });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to calculate salary: " + error.message,
-        variant: "destructive",
-      });
+      console.error('Error calculating salary:', error);
+      toast({ title: 'Error', description: 'Failed to calculate salary.' });
     }
   };
 
@@ -227,11 +253,9 @@ const BulkTimeTracking = () => {
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
-
-  // ... (JSX is unchanged)
 
   return (
     <div className="space-y-6 p-6">
@@ -253,7 +277,7 @@ const BulkTimeTracking = () => {
                   id="date"
                   type="date"
                   value={selectedDate}
-                  onChange={e => setSelectedDate(e.target.value)}
+                  onChange={(e) => setSelectedDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -278,7 +302,7 @@ const BulkTimeTracking = () => {
                   id="salary-start-date"
                   type="date"
                   value={salaryStartDate}
-                  onChange={e => setSalaryStartDate(e.target.value)}
+                  onChange={(e) => setSalaryStartDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -288,7 +312,7 @@ const BulkTimeTracking = () => {
                   id="salary-end-date"
                   type="date"
                   value={salaryEndDate}
-                  onChange={e => setSalaryEndDate(e.target.value)}
+                  onChange={(e) => setSalaryEndDate(e.target.value)}
                   className="w-auto min-w-48 text-base"
                 />
               </div>
@@ -303,9 +327,12 @@ const BulkTimeTracking = () => {
         {showSalaryResults && salaryResults.length > 0 && (
           <Card className="border-4 border-green-300 bg-green-50/70">
             <CardHeader className="pb-4">
-              <CardTitle className="text-green-800 text-2xl">💰 Salary Calculation Results</CardTitle>
+              <CardTitle className="text-green-800 text-2xl">
+                💰 Salary Calculation Results
+              </CardTitle>
               <p className="text-muted-foreground text-lg">
-                Period: <strong>{formatDate(salaryStartDate)}</strong> to <strong>{formatDate(salaryEndDate)}</strong>
+                Period: <strong>{formatDate(salaryStartDate)}</strong> to{' '}
+                <strong>{formatDate(salaryEndDate)}</strong>
               </p>
             </CardHeader>
             <CardContent>
@@ -323,22 +350,33 @@ const BulkTimeTracking = () => {
                     {salaryResults.map((result, index) => (
                       <TableRow key={index} className="hover:bg-green-100/50">
                         <TableCell className="font-medium text-base">{result.employee_name}</TableCell>
-                        <TableCell className="text-center text-base">{result.total_hours} hours</TableCell>
-                        <TableCell className="text-center text-base">₹{result.hourly_rate}</TableCell>
-                        <TableCell className="font-bold text-green-700 text-lg">₹{result.total_salary.toFixed(2)}</TableCell>
+                        <TableCell className="text-center text-base">
+                          {result.total_hours} hours
+                        </TableCell>
+                        <TableCell className="text-center text-base">
+                          ₹{result.salary_per_hour}
+                        </TableCell>
+                        <TableCell className="font-bold text-green-700 text-lg">
+                          ₹{result.total_salary.toFixed(2)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
                 <div className="mt-8 p-6 bg-green-100 border-2 border-green-400 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-semibold text-green-800">Grand Total Amount:</span>
+                    <span className="text-xl font-semibold text-green-800">
+                      Grand Total Amount:
+                    </span>
                     <span className="text-3xl font-bold text-green-800">
-                      ₹{salaryResults.reduce((sum, result) => sum + result.total_salary, 0).toFixed(2)}
+                      ₹{salaryResults
+                        .reduce((sum, result) => sum + result.total_salary, 0)
+                        .toFixed(2)}
                     </span>
                   </div>
                   <div className="text-base text-green-600 mt-3">
-                    Total employees: {salaryResults.length} | Total hours: {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
+                    Total employees: {salaryResults.length} | Total hours:{' '}
+                    {salaryResults.reduce((sum, result) => sum + result.total_hours, 0)}
                   </div>
                 </div>
               </div>
@@ -363,10 +401,11 @@ const BulkTimeTracking = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map(employee => {
-                    const hours = employeeHours[employee.id]?.hours || 0;
-                    const status = employeeHours[employee.id]?.status || 'present';
-                    const totalPay = hours * (employee.salary_per_hour || 0);
+                  {employees.map((employee) => {
+                    const employeeData = employeeHours[employee.id];
+                    const hours = employeeData ? employeeData.hours : '';
+                    const status = employeeData ? employeeData.status : 'present';
+                    const totalPay = (hours || 0) * (employee.salary_per_hour || 0);
 
                     return (
                       <TableRow key={employee.id} className="hover:bg-accent/50">
@@ -378,14 +417,17 @@ const BulkTimeTracking = () => {
                             min="0"
                             max="24"
                             value={hours}
-                            onChange={e => updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)}
+                            placeholder="Enter Hours"
+                            onChange={(e) =>
+                              updateEmployeeHours(employee.id, parseFloat(e.target.value) || 0)
+                            }
                             className="w-24 text-base"
                           />
                         </TableCell>
                         <TableCell>
                           <Select
                             value={status}
-                            onValueChange={value => updateEmployeeStatus(employee.id, value)}
+                            onValueChange={(value) => updateEmployeeStatus(employee.id, value)}
                           >
                             <SelectTrigger className="w-36 text-base">
                               <SelectValue />
@@ -399,7 +441,9 @@ const BulkTimeTracking = () => {
                           </Select>
                         </TableCell>
                         <TableCell className="text-base">₹{employee.salary_per_hour}</TableCell>
-                        <TableCell className="font-semibold text-base">₹{totalPay.toFixed(2)}</TableCell>
+                        <TableCell className="font-semibold text-base">
+                          ₹{totalPay.toFixed(2)}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
