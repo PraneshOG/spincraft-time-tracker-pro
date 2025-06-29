@@ -35,32 +35,25 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Load work logs when component mounts and when filters change
+  // Load work logs when filters change
   useEffect(() => {
     console.log('=== FETCHING WORK LOGS ===');
     console.log('Selected date:', selectedDate);
     console.log('Selected employee:', selectedEmployee);
     
-    // For debugging, let's fetch ALL work logs first to see what we have
-    fetchWorkLogs({});
-  }, [selectedEmployee, selectedDate, fetchWorkLogs]);
-
-  // Separate effect to log what we received
-  useEffect(() => {
-    console.log('=== WORK LOGS RECEIVED ===');
-    console.log('Total work logs count:', workLogs.length);
-    console.log('All work logs:', workLogs);
+    const filters: any = {};
     
-    workLogs.forEach((log, index) => {
-      console.log(`Log ${index + 1}:`, {
-        id: log.id,
-        date: log.date,
-        employee_name: log.employees?.name,
-        total_hours: log.total_hours,
-        status: log.status
-      });
-    });
-  }, [workLogs]);
+    if (selectedEmployee !== 'all') {
+      filters.employeeId = selectedEmployee;
+    }
+    
+    if (selectedDate) {
+      filters.startDate = selectedDate;
+      filters.endDate = selectedDate;
+    }
+    
+    fetchWorkLogs(filters);
+  }, [selectedEmployee, selectedDate, fetchWorkLogs]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,9 +95,16 @@ const TimeTracking = () => {
       setEditingLog(null);
       setIsDialogOpen(false);
       
-      // Refresh data by fetching all logs again
-      console.log('Refreshing work logs after submit...');
-      await fetchWorkLogs({});
+      // Refresh data with current filters
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
       console.error('Error saving work log:', error);
       toast({
@@ -158,8 +158,16 @@ const TimeTracking = () => {
       setInlineEditingId(null);
       setInlineEditData({});
       
-      // Refresh data
-      await fetchWorkLogs({});
+      // Refresh data with current filters
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
       console.error('Error updating work log:', error);
       toast({
@@ -179,8 +187,16 @@ const TimeTracking = () => {
         description: "Work log has been successfully deleted.",
       });
       
-      // Refresh data
-      await fetchWorkLogs({});
+      // Refresh data with current filters
+      const filters: any = {};
+      if (selectedEmployee !== 'all') {
+        filters.employeeId = selectedEmployee;
+      }
+      if (selectedDate) {
+        filters.startDate = selectedDate;
+        filters.endDate = selectedDate;
+      }
+      await fetchWorkLogs(filters);
     } catch (error) {
       console.error('Error deleting work log:', error);
       toast({
@@ -191,25 +207,13 @@ const TimeTracking = () => {
     }
   };
 
-  // Filter logs - for now, let's show ALL logs to see if any exist
+  // Filter logs properly
   const filteredLogs = workLogs.filter(log => {
     const matchesSearch = !searchTerm || 
       log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Temporarily disable date filtering to see all logs
-    // const matchesDate = !selectedDate || log.date === selectedDate;
-    const matchesDate = true; // Show all dates for debugging
-    
+    const matchesDate = !selectedDate || log.date === selectedDate;
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
-    
-    console.log(`Filtering log ${log.id}:`, {
-      matchesSearch,
-      matchesDate, 
-      matchesEmployee,
-      logDate: log.date,
-      selectedDate,
-      employeeName: log.employees?.name
-    });
     
     return matchesSearch && matchesDate && matchesEmployee;
   });
@@ -233,7 +237,7 @@ const TimeTracking = () => {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold">Time Tracking</h1>
-          <p className="text-muted-foreground">Track employee working hours - select any date to view and edit logs</p>
+          <p className="text-muted-foreground">Track employee working hours</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -357,7 +361,7 @@ const TimeTracking = () => {
       <Card>
         <CardHeader>
           <CardTitle>Work Logs</CardTitle>
-          <CardDescription>All work logs (debugging mode - showing all dates)</CardDescription>
+          <CardDescription>Filter and manage work logs</CardDescription>
           
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
@@ -384,7 +388,7 @@ const TimeTracking = () => {
             </Select>
             
             <div className="space-y-1">
-              <Label htmlFor="dateFilter">Select Date to View/Edit</Label>
+              <Label htmlFor="dateFilter">Filter by Date</Label>
               <Input
                 id="dateFilter"
                 type="date"
@@ -397,26 +401,18 @@ const TimeTracking = () => {
         
         <CardContent>
           <div className="space-y-4">
-            <div className="bg-yellow-100 p-3 rounded border">
-              <p className="text-sm"><strong>Debug Info:</strong></p>
-              <p>Total work logs: {workLogs.length}</p>
-              <p>Filtered logs: {filteredLogs.length}</p>
-              <p>Selected date: {selectedDate}</p>
-              <p>Employees count: {employees.length}</p>
-            </div>
-            
             {filteredLogs.length > 0 ? (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Showing {filteredLogs.length} work log(s) (all dates for debugging)
+                  Showing {filteredLogs.length} work log(s) for {selectedDate ? new Date(selectedDate).toLocaleDateString() : 'all dates'}
                 </div>
                 {filteredLogs.map((log) => (
-                  <div key={log.id} className="border rounded-lg p-4 space-y-3 bg-blue-50">
+                  <div key={log.id} className="border rounded-lg p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <h3 className="font-medium text-lg">{log.employees?.name || 'Unknown Employee'}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Date: {log.date} | Hours: {log.total_hours}h
+                          Date: {new Date(log.date).toLocaleDateString()} | Hours: {log.total_hours}h
                         </p>
                       </div>
                       <Badge className={`${getStatusColor(log.status)} text-white`}>
@@ -434,7 +430,7 @@ const TimeTracking = () => {
                               step="0.5"
                               min="0"
                               max="24"
-                              value={inlineEditData.total_hours}
+                              value={inlineEditData.total_hours || 0}
                               onChange={(e) => setInlineEditData(prev => ({ 
                                 ...prev, 
                                 total_hours: parseFloat(e.target.value) || 0 
@@ -445,7 +441,7 @@ const TimeTracking = () => {
                           <div>
                             <Label className="text-sm">Status</Label>
                             <Select
-                              value={inlineEditData.status}
+                              value={inlineEditData.status || 'present'}
                               onValueChange={(value) => setInlineEditData(prev => ({ 
                                 ...prev, 
                                 status: value 
@@ -466,7 +462,7 @@ const TimeTracking = () => {
                         <div>
                           <Label className="text-sm">Notes</Label>
                           <Textarea
-                            value={inlineEditData.notes}
+                            value={inlineEditData.notes || ''}
                             onChange={(e) => setInlineEditData(prev => ({ 
                               ...prev, 
                               notes: e.target.value 
@@ -561,8 +557,8 @@ const TimeTracking = () => {
               </>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No work logs found</p>
-                <p className="text-sm mt-2">Try adding a work log using the button above</p>
+                <p>No work logs found for the selected criteria</p>
+                <p className="text-sm mt-2">Try adjusting your filters or add a new work log</p>
               </div>
             )}
           </div>
