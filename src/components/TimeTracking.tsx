@@ -193,29 +193,31 @@ const TimeTracking = () => {
 
   // Client-side filtering - apply filters to the loaded data
   const filteredLogs = workLogs.filter(log => {
-    console.log('Filtering log:', {
-      id: log.id,
-      date: log.date,
-      employee_name: log.employees?.name,
-      employee_id: log.employee_id,
-      searchTerm,
-      selectedDate,
-      selectedEmployee
+    console.log('=== FILTERING LOG ===', {
+      logId: log.id,
+      logDate: log.date,
+      employeeName: log.employees?.name,
+      employeeId: log.employee_id,
+      currentFilters: {
+        searchTerm,
+        selectedDate,
+        selectedEmployee
+      }
     });
 
     // Search term filter
     const matchesSearch = !searchTerm || 
       (log.employees?.name && log.employees.name.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    // Date filter - only apply if a specific date is selected
-    const matchesDate = !selectedDate || log.date === selectedDate;
+    // Date filter - only apply if a specific date is selected and not empty
+    const matchesDate = !selectedDate || selectedDate === '' || log.date === selectedDate;
     
     // Employee filter - only apply if a specific employee is selected
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
     const result = matchesSearch && matchesDate && matchesEmployee;
     
-    console.log('Filter result:', {
+    console.log('Filter results:', {
       matchesSearch,
       matchesDate,
       matchesEmployee,
@@ -433,6 +435,7 @@ const TimeTracking = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
+                placeholder="Select date to filter..."
               />
             </div>
 
