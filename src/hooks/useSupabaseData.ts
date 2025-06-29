@@ -110,6 +110,7 @@ export const useWorkLogs = () => {
     
     setLoading(true);
     try {
+      // Always fetch ALL work logs for better client-side filtering
       let query = supabase
         .from('work_logs')
         .select(`
@@ -122,7 +123,8 @@ export const useWorkLogs = () => {
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
 
-      if (filters?.employeeId) {
+      // Only apply filters if they are specifically requested
+      if (filters?.employeeId && filters.employeeId !== 'all') {
         console.log('Filtering by employee:', filters.employeeId);
         query = query.eq('employee_id', filters.employeeId);
       }
@@ -142,18 +144,26 @@ export const useWorkLogs = () => {
         throw error;
       }
       
-      console.log('Raw data from Supabase:', data);
+      console.log('Raw data from Supabase:', data?.length, 'records');
       
-      // Ensure we have proper data structure
+      // Ensure we have proper data structure with proper number conversion
       const processedData = (data || []).map(log => ({
         ...log,
-        total_hours: log.total_hours || 0,
+        total_hours: Number(log.total_hours) || 0, // Ensure it's a number
         status: log.status || 'present',
         notes: log.notes || '',
         employees: log.employees || { name: 'Unknown', id: log.employee_id }
       }));
       
-      console.log('Processed work logs:', processedData);
+      console.log('Processed work logs:', processedData.length, 'records');
+      console.log('Sample data:', processedData.slice(0, 3).map(log => ({
+        id: log.id,
+        date: log.date,
+        employee: log.employees?.name,
+        hours: log.total_hours,
+        status: log.status
+      })));
+      
       setWorkLogs(processedData as WorkLog[]);
     } catch (error) {
       console.error('Error fetching work logs:', error);
@@ -172,13 +182,15 @@ export const useWorkLogs = () => {
     try {
       console.log('Adding work log:', workLogData);
       
+      const dataToInsert = {
+        ...workLogData,
+        total_hours: Number(workLogData.total_hours) || 0,
+        status: workLogData.status || 'present'
+      };
+      
       const { data, error } = await supabase
         .from('work_logs')
-        .insert([{
-          ...workLogData,
-          total_hours: workLogData.total_hours || 0,
-          status: workLogData.status || 'present'
-        }])
+        .insert([dataToInsert])
         .select()
         .single();
       
@@ -188,6 +200,9 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log added successfully:', data);
+      
+      // Refresh all data after adding
+      await fetchWorkLogs();
       return data;
     } catch (error) {
       console.error('Error adding work log:', error);
@@ -199,13 +214,15 @@ export const useWorkLogs = () => {
     try {
       console.log('Updating work log:', id, updates);
       
+      const updateData = { 
+        ...updates, 
+        updated_at: new Date().toISOString(),
+        total_hours: Number(updates.total_hours) || 0
+      };
+      
       const { error } = await supabase
         .from('work_logs')
-        .update({ 
-          ...updates, 
-          updated_at: new Date().toISOString(),
-          total_hours: updates.total_hours || 0
-        })
+        .update(updateData)
         .eq('id', id);
       
       if (error) {
@@ -214,6 +231,9 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log updated successfully');
+      
+      // Refresh all data after updating
+      await fetchWorkLogs();
     } catch (error) {
       console.error('Error updating work log:', error);
       throw error;
@@ -235,6 +255,9 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log deleted successfully');
+      
+      // Refresh all data after deleting
+      await fetchWorkLogs();
     } catch (error) {
       console.error('Error deleting work log:', error);
       throw error;
@@ -243,15 +266,20 @@ export const useWorkLogs = () => {
 
   const addBulkWorkLogs = async (workLogs: Omit<WorkLog, 'id' | 'created_at' | 'updated_at'>[]) => {
     try {
+      const dataToInsert = workLogs.map(log => ({
+        ...log,
+        total_hours: Number(log.total_hours) || 0,
+        status: log.status || 'present'
+      }));
+      
       const { error } = await supabase
         .from('work_logs')
-        .insert(workLogs.map(log => ({
-          ...log,
-          total_hours: log.total_hours || 0,
-          status: log.status || 'present'
-        })));
+        .insert(dataToInsert);
       
       if (error) throw error;
+      
+      // Refresh all data after bulk insert
+      await fetchWorkLogs();
     } catch (error) {
       console.error('Error adding bulk work logs:', error);
       throw error;
@@ -376,7 +404,7 @@ export const useSalaryCalculations = () => {
             hourly_rate: log.employees?.salary_per_hour || 0
           };
         }
-        acc[empId].total_hours += log.total_hours;
+        acc[empId].total_hours += Number(log.total_hours) || 0;
         return acc;
       }, {});
 

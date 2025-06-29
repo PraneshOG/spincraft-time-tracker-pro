@@ -26,7 +26,7 @@ const TimeTracking = () => {
   const [editingLog, setEditingLog] = useState<any>(null);
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditData, setInlineEditData] = useState<any>({});
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -36,59 +36,30 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Initialize data on component mount
+  // Load all work logs on component mount
   useEffect(() => {
-    const initializeData = async () => {
-      if (isInitialized) return;
-      
-      console.log('=== INITIALIZING TIME TRACKING ===');
-      console.log('Selected date:', selectedDate);
-      console.log('Selected employee:', selectedEmployee);
-      
-      try {
-        // Load ALL work logs initially, then filter in the component
-        await fetchWorkLogs();
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Error initializing data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load work logs",
-          variant: "destructive",
-        });
-      }
-    };
+    console.log('=== COMPONENT MOUNTED ===');
+    loadAllWorkLogs();
+  }, []);
 
-    initializeData();
-  }, []); // Only run once on mount
-
-  // Refresh data when filters change
-  const refreshData = async () => {
-    console.log('=== REFRESHING DATA ===');
-    console.log('Current filters - Date:', selectedDate, 'Employee:', selectedEmployee);
-    
+  const loadAllWorkLogs = async () => {
+    console.log('=== LOADING ALL WORK LOGS ===');
     try {
-      // Always fetch all data and filter in component for better reliability
+      setIsRefreshing(true);
+      // Fetch ALL work logs without any filters to ensure we have complete data
       await fetchWorkLogs();
+      console.log('Work logs loaded successfully');
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('Error loading work logs:', error);
       toast({
         title: "Error",
-        description: "Failed to refresh work logs",
+        description: "Failed to load work logs",
         variant: "destructive",
       });
+    } finally {
+      setIsRefreshing(false);
     }
   };
-
-  // Refresh when date or employee changes
-  useEffect(() => {
-    if (isInitialized) {
-      console.log('=== FILTER CHANGED ===');
-      console.log('New date:', selectedDate);
-      console.log('New employee:', selectedEmployee);
-      refreshData();
-    }
-  }, [selectedDate, selectedEmployee, isInitialized]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +70,7 @@ const TimeTracking = () => {
       
       const logData = {
         ...formData,
-        total_hours: formData.total_hours || 0,
+        total_hours: Number(formData.total_hours) || 0,
         created_by: admin?.id || 'admin',
       };
 
@@ -131,8 +102,8 @@ const TimeTracking = () => {
       setEditingLog(null);
       setIsDialogOpen(false);
       
-      // Refresh data
-      await refreshData();
+      // Reload all data to ensure consistency
+      await loadAllWorkLogs();
     } catch (error) {
       console.error('Error saving work log:', error);
       toast({
@@ -148,7 +119,7 @@ const TimeTracking = () => {
     setFormData({
       employee_id: log.employee_id,
       date: log.date,
-      total_hours: log.total_hours || 0,
+      total_hours: Number(log.total_hours) || 0,
       status: log.status || 'present',
       notes: log.notes || '',
     });
@@ -159,7 +130,7 @@ const TimeTracking = () => {
     console.log('Starting inline edit for log:', log.id);
     setInlineEditingId(log.id);
     setInlineEditData({
-      total_hours: log.total_hours || 0,
+      total_hours: Number(log.total_hours) || 0,
       status: log.status || 'present',
       notes: log.notes || '',
     });
@@ -176,7 +147,7 @@ const TimeTracking = () => {
       console.log('Updating work log with data:', inlineEditData);
       await updateWorkLog(log.id, {
         ...inlineEditData,
-        total_hours: inlineEditData.total_hours || 0,
+        total_hours: Number(inlineEditData.total_hours) || 0,
         updated_at: new Date().toISOString(),
       });
       await addAdminLog('UPDATE_WORKLOG', `Updated work log for ${log.employees?.name} on ${log.date} (inline edit)`, admin?.id || 'admin');
@@ -187,8 +158,8 @@ const TimeTracking = () => {
       setInlineEditingId(null);
       setInlineEditData({});
       
-      // Refresh data
-      await refreshData();
+      // Reload all data to ensure consistency
+      await loadAllWorkLogs();
     } catch (error) {
       console.error('Error updating work log:', error);
       toast({
@@ -208,8 +179,8 @@ const TimeTracking = () => {
         description: "Work log has been successfully deleted.",
       });
       
-      // Refresh data
-      await refreshData();
+      // Reload all data to ensure consistency
+      await loadAllWorkLogs();
     } catch (error) {
       console.error('Error deleting work log:', error);
       toast({
@@ -220,17 +191,8 @@ const TimeTracking = () => {
     }
   };
 
-  // Filter logs properly with all criteria - this is the key fix
+  // Filter logs with proper debugging
   const filteredLogs = workLogs.filter(log => {
-    console.log('Filtering log:', {
-      logDate: log.date,
-      selectedDate,
-      logEmployeeId: log.employee_id,
-      selectedEmployee,
-      logName: log.employees?.name,
-      searchTerm
-    });
-
     // Search term filter
     const matchesSearch = !searchTerm || 
       log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -241,20 +203,16 @@ const TimeTracking = () => {
     // Employee filter
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
-    const matches = matchesSearch && matchesDate && matchesEmployee;
-    console.log('Filter result:', { matches, matchesSearch, matchesDate, matchesEmployee });
-    
-    return matches;
+    return matchesSearch && matchesDate && matchesEmployee;
   });
 
-  console.log('=== CURRENT STATE ===');
+  console.log('=== CURRENT FILTER STATE ===');
   console.log('Total work logs:', workLogs.length);
-  console.log('Filtered logs count:', filteredLogs.length);
   console.log('Selected date:', selectedDate);
   console.log('Selected employee:', selectedEmployee);
-  console.log('Is loading:', workLogsLoading);
-  console.log('Is initialized:', isInitialized);
-  console.log('Filtered logs:', filteredLogs.map(log => ({
+  console.log('Search term:', searchTerm);
+  console.log('Filtered logs count:', filteredLogs.length);
+  console.log('Sample filtered logs:', filteredLogs.slice(0, 3).map(log => ({
     id: log.id,
     date: log.date,
     employee: log.employees?.name,
@@ -271,16 +229,6 @@ const TimeTracking = () => {
       default: return 'bg-gray-500';
     }
   };
-
-  if (!isInitialized || workLogsLoading) {
-    return (
-      <div className="space-y-4 p-4">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Loading time tracking data...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4 p-4">
@@ -415,8 +363,13 @@ const TimeTracking = () => {
               <CardTitle>Work Logs</CardTitle>
               <CardDescription>Filter and manage work logs</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={refreshData} disabled={workLogsLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${workLogsLoading ? 'animate-spin' : ''}`} />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={loadAllWorkLogs} 
+              disabled={workLogsLoading || isRefreshing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${(workLogsLoading || isRefreshing) ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
@@ -459,7 +412,11 @@ const TimeTracking = () => {
         
         <CardContent>
           <div className="space-y-4">
-            {filteredLogs.length > 0 ? (
+            {workLogsLoading || isRefreshing ? (
+              <div className="text-center py-8">
+                <div className="text-lg">Loading work logs...</div>
+              </div>
+            ) : filteredLogs.length > 0 ? (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
                   Showing {filteredLogs.length} work log(s) for {selectedDate ? new Date(selectedDate).toLocaleDateString() : 'all dates'}
@@ -471,7 +428,7 @@ const TimeTracking = () => {
                       <div className="flex-1">
                         <h3 className="font-medium text-lg">{log.employees?.name || 'Unknown Employee'}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Date: {new Date(log.date).toLocaleDateString()} | Hours: {log.total_hours || 0}h
+                          Date: {new Date(log.date).toLocaleDateString()} | Hours: {Number(log.total_hours) || 0}h
                         </p>
                       </div>
                       <Badge className={`${getStatusColor(log.status)} text-white`}>
@@ -489,7 +446,7 @@ const TimeTracking = () => {
                               step="0.5"
                               min="0"
                               max="24"
-                              value={inlineEditData.total_hours || 0}
+                              value={Number(inlineEditData.total_hours) || 0}
                               onChange={(e) => setInlineEditData(prev => ({ 
                                 ...prev, 
                                 total_hours: parseFloat(e.target.value) || 0 
@@ -556,7 +513,7 @@ const TimeTracking = () => {
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4 text-muted-foreground" />
-                            <span className="font-medium">{log.total_hours || 0}h</span>
+                            <span className="font-medium">{Number(log.total_hours) || 0}h</span>
                           </div>
                         </div>
                         {log.notes && (
