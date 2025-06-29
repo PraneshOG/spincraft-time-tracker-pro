@@ -104,15 +104,12 @@ export const useWorkLogs = () => {
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchWorkLogs = useCallback(async (filters?: { employeeId?: string; startDate?: string; endDate?: string }) => {
-    console.log('=== FETCHING WORK LOGS ===');
-    console.log('Filters received:', filters);
+  const fetchWorkLogs = useCallback(async () => {
+    console.log('=== FETCHING ALL WORK LOGS ===');
     
     setLoading(true);
     try {
-      // ALWAYS fetch ALL work logs - no server-side filtering at all
-      console.log('Fetching ALL work logs from database...');
-      
+      // ALWAYS fetch ALL work logs - no server-side filtering
       const { data, error } = await supabase
         .from('work_logs')
         .select(`
@@ -152,22 +149,11 @@ export const useWorkLogs = () => {
           employees: log.employees || { name: 'Unknown', id: log.employee_id }
         };
         
-        console.log(`Processing log ${log.id}: raw_hours="${log.total_hours}" (${typeof log.total_hours}) -> processed_hours=${processedLog.total_hours} (${typeof processedLog.total_hours})`);
         return processedLog;
       });
       
       console.log('Processed work logs:', processedData.length, 'records');
-      console.log('Sample processed data:', processedData.slice(0, 3).map(log => ({
-        id: log.id,
-        date: log.date,
-        employee: log.employees?.name,
-        hours: log.total_hours,
-        hours_type: typeof log.total_hours,
-        status: log.status
-      })));
-      
       setWorkLogs(processedData as WorkLog[]);
-      
       console.log('Work logs state updated successfully');
     } catch (error) {
       console.error('Error fetching work logs:', error);
