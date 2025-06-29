@@ -106,12 +106,14 @@ export const useWorkLogs = () => {
 
   const fetchWorkLogs = useCallback(async (filters?: { employeeId?: string; startDate?: string; endDate?: string }) => {
     console.log('=== FETCHING WORK LOGS ===');
-    console.log('Filters:', filters);
+    console.log('Filters received:', filters);
     
     setLoading(true);
     try {
-      // Build the query - always fetch with employee data
-      let query = supabase
+      // ALWAYS fetch ALL work logs - no server-side filtering at all
+      console.log('Fetching ALL work logs from database...');
+      
+      const { data, error } = await supabase
         .from('work_logs')
         .select(`
           *,
@@ -122,24 +124,6 @@ export const useWorkLogs = () => {
         `)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
-
-      // ONLY apply server-side filters if explicitly requested for reports/specific queries
-      // For the main TimeTracking component, we want ALL data and will filter client-side
-      if (filters?.employeeId && filters.employeeId !== 'all') {
-        console.log('Applying employee filter:', filters.employeeId);
-        query = query.eq('employee_id', filters.employeeId);
-      }
-      
-      // Only apply date filters if BOTH start and end dates are provided (for reports)
-      if (filters?.startDate && filters?.endDate && filters.startDate === filters.endDate) {
-        console.log('Applying specific date filter:', filters.startDate);
-        query = query.eq('date', filters.startDate);
-      } else if (filters?.startDate && filters?.endDate) {
-        console.log('Applying date range filter:', filters.startDate, 'to', filters.endDate);
-        query = query.gte('date', filters.startDate).lte('date', filters.endDate);
-      }
-
-      const { data, error } = await query;
       
       if (error) {
         console.error('Supabase error:', error);
