@@ -36,9 +36,9 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Load all work logs on component mount
+  // Load all work logs on component mount and when needed
   useEffect(() => {
-    console.log('=== COMPONENT MOUNTED ===');
+    console.log('=== COMPONENT MOUNTED - LOADING ALL WORK LOGS ===');
     loadAllWorkLogs();
   }, []);
 
@@ -46,9 +46,9 @@ const TimeTracking = () => {
     console.log('=== LOADING ALL WORK LOGS ===');
     try {
       setIsRefreshing(true);
-      // Fetch ALL work logs without any filters to ensure we have complete data
+      // Always fetch ALL work logs without any filters
       await fetchWorkLogs();
-      console.log('Work logs loaded successfully');
+      console.log('All work logs loaded successfully');
     } catch (error) {
       console.error('Error loading work logs:', error);
       toast({
@@ -191,34 +191,39 @@ const TimeTracking = () => {
     }
   };
 
-  // Filter logs with proper debugging
+  // Client-side filtering with proper debugging
   const filteredLogs = workLogs.filter(log => {
     // Search term filter
     const matchesSearch = !searchTerm || 
       log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Date filter - exact match
+    // Date filter - only apply if a specific date is selected
     const matchesDate = !selectedDate || log.date === selectedDate;
     
-    // Employee filter
+    // Employee filter - only apply if a specific employee is selected
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
-    return matchesSearch && matchesDate && matchesEmployee;
+    const matches = matchesSearch && matchesDate && matchesEmployee;
+    
+    return matches;
   });
 
   console.log('=== CURRENT FILTER STATE ===');
-  console.log('Total work logs:', workLogs.length);
+  console.log('Total work logs in state:', workLogs.length);
   console.log('Selected date:', selectedDate);
   console.log('Selected employee:', selectedEmployee);
   console.log('Search term:', searchTerm);
   console.log('Filtered logs count:', filteredLogs.length);
-  console.log('Sample filtered logs:', filteredLogs.slice(0, 3).map(log => ({
-    id: log.id,
-    date: log.date,
-    employee: log.employees?.name,
-    hours: log.total_hours,
-    status: log.status
-  })));
+  
+  if (workLogs.length > 0) {
+    console.log('Sample work logs:', workLogs.slice(0, 3).map(log => ({
+      id: log.id,
+      date: log.date,
+      employee: log.employees?.name,
+      hours: log.total_hours,
+      status: log.status
+    })));
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -419,8 +424,11 @@ const TimeTracking = () => {
             ) : filteredLogs.length > 0 ? (
               <>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Showing {filteredLogs.length} work log(s) for {selectedDate ? new Date(selectedDate).toLocaleDateString() : 'all dates'}
+                  Showing {filteredLogs.length} work log(s) 
+                  {selectedDate && ` for ${new Date(selectedDate).toLocaleDateString()}`}
                   {selectedEmployee !== 'all' && ` for ${employees.find(e => e.id === selectedEmployee)?.name}`}
+                  <br />
+                  Total work logs in system: {workLogs.length}
                 </div>
                 {filteredLogs.map((log) => (
                   <div key={log.id} className="border rounded-lg p-4 space-y-3">
@@ -579,6 +587,9 @@ const TimeTracking = () => {
                   {selectedEmployee !== 'all' && ` | Employee: ${employees.find(e => e.id === selectedEmployee)?.name}`}
                 </p>
                 <p className="text-sm mt-2">Try adjusting your filters or add a new work log</p>
+                <p className="text-xs mt-2 text-blue-600">
+                  Total work logs in system: {workLogs.length}
+                </p>
               </div>
             )}
           </div>
