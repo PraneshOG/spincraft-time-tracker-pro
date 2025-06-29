@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, WorkLog, AdminLog } from '@/types';
 import { toast } from '@/hooks/use-toast';
@@ -102,57 +102,92 @@ export const useEmployees = () => {
 
 export const useWorkLogs = () => {
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  const fetchWorkLogs = async (filters?: { employeeId?: string; startDate?: string; endDate?: string }) => {
+  const fetchWorkLogs = useCallback(async (filters?: { employeeId?: string; startDate?: string; endDate?: string }) => {
+    console.log('=== FETCHING WORK LOGS ===');
+    console.log('Filters:', filters);
+    
+    setLoading(true);
     try {
       let query = supabase
         .from('work_logs')
         .select(`
           *,
           employees (
-            name
+            name,
+            id
           )
         `)
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
 
       if (filters?.employeeId) {
+        console.log('Filtering by employee:', filters.employeeId);
         query = query.eq('employee_id', filters.employeeId);
       }
       if (filters?.startDate) {
+        console.log('Filtering by start date:', filters.startDate);
         query = query.gte('date', filters.startDate);
       }
       if (filters?.endDate) {
+        console.log('Filtering by end date:', filters.endDate);
         query = query.lte('date', filters.endDate);
       }
 
       const { data, error } = await query;
       
-      if (error) throw error;
-      // Cast the data to WorkLog[] since we know the structure matches
-      setWorkLogs((data as WorkLog[]) || []);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Raw data from Supabase:', data);
+      
+      // Ensure we have proper data structure
+      const processedData = (data || []).map(log => ({
+        ...log,
+        total_hours: log.total_hours || 0,
+        status: log.status || 'present',
+        notes: log.notes || '',
+        employees: log.employees || { name: 'Unknown', id: log.employee_id }
+      }));
+      
+      console.log('Processed work logs:', processedData);
+      setWorkLogs(processedData as WorkLog[]);
     } catch (error) {
       console.error('Error fetching work logs:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch work logs",
+        description: `Failed to fetch work logs: ${error.message}`,
         variant: "destructive",
       });
+      setWorkLogs([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const addWorkLog = async (workLogData: Omit<WorkLog, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      console.log('Adding work log:', workLogData);
+      
       const { data, error } = await supabase
         .from('work_logs')
-        .insert([workLogData])
+        .insert([{
+          ...workLogData,
+          total_hours: workLogData.total_hours || 0,
+          status: workLogData.status || 'present'
+        }])
         .select()
         .single();
       
-      if (error) throw error;
-      await fetchWorkLogs();
+      if (error) {
+        console.error('Error adding work log:', error);
+        throw error;
+      }
+      
+      console.log('Work log added successfully:', data);
       return data;
     } catch (error) {
       console.error('Error adding work log:', error);
@@ -162,13 +197,23 @@ export const useWorkLogs = () => {
 
   const updateWorkLog = async (id: string, updates: Partial<WorkLog>) => {
     try {
+      console.log('Updating work log:', id, updates);
+      
       const { error } = await supabase
         .from('work_logs')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ 
+          ...updates, 
+          updated_at: new Date().toISOString(),
+          total_hours: updates.total_hours || 0
+        })
         .eq('id', id);
       
-      if (error) throw error;
-      await fetchWorkLogs();
+      if (error) {
+        console.error('Error updating work log:', error);
+        throw error;
+      }
+      
+      console.log('Work log updated successfully');
     } catch (error) {
       console.error('Error updating work log:', error);
       throw error;
@@ -177,13 +222,19 @@ export const useWorkLogs = () => {
 
   const deleteWorkLog = async (id: string) => {
     try {
+      console.log('Deleting work log:', id);
+      
       const { error } = await supabase
         .from('work_logs')
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
-      await fetchWorkLogs();
+      if (error) {
+        console.error('Error deleting work log:', error);
+        throw error;
+      }
+      
+      console.log('Work log deleted successfully');
     } catch (error) {
       console.error('Error deleting work log:', error);
       throw error;
@@ -194,10 +245,13 @@ export const useWorkLogs = () => {
     try {
       const { error } = await supabase
         .from('work_logs')
-        .insert(workLogs);
+        .insert(workLogs.map(log => ({
+          ...log,
+          total_hours: log.total_hours || 0,
+          status: log.status || 'present'
+        })));
       
       if (error) throw error;
-      await fetchWorkLogs();
     } catch (error) {
       console.error('Error adding bulk work logs:', error);
       throw error;

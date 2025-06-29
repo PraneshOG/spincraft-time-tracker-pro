@@ -8,14 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Search, Save, X, Clock, RotateCcw } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Save, X, Clock, RotateCcw, RefreshCw } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
 const TimeTracking = () => {
   const { employees } = useEmployees();
-  const { workLogs, addWorkLog, updateWorkLog, deleteWorkLog, fetchWorkLogs } = useWorkLogs();
+  const { workLogs, addWorkLog, updateWorkLog, deleteWorkLog, fetchWorkLogs, loading: workLogsLoading } = useWorkLogs();
   const { addAdminLog } = useAdminLogs();
   const { admin } = useAuth();
 
@@ -26,7 +26,7 @@ const TimeTracking = () => {
   const [editingLog, setEditingLog] = useState<any>(null);
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditData, setInlineEditData] = useState<any>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -36,14 +36,14 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Initialize and load data on component mount
+  // Initialize data on component mount
   useEffect(() => {
     const initializeData = async () => {
+      if (isInitialized) return;
+      
       console.log('=== INITIALIZING TIME TRACKING ===');
       console.log('Selected date:', selectedDate);
       console.log('Selected employee:', selectedEmployee);
-      
-      setIsLoading(true);
       
       try {
         const filters: any = {};
@@ -59,8 +59,9 @@ const TimeTracking = () => {
           filters.employeeId = selectedEmployee;
         }
         
-        console.log('Applying filters:', filters);
+        console.log('Applying initial filters:', filters);
         await fetchWorkLogs(filters);
+        setIsInitialized(true);
       } catch (error) {
         console.error('Error initializing data:', error);
         toast({
@@ -68,40 +69,38 @@ const TimeTracking = () => {
           description: "Failed to load work logs",
           variant: "destructive",
         });
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    // Only initialize if we have the basic data
-    if (employees.length > 0 || selectedDate) {
-      initializeData();
-    }
-  }, [selectedEmployee, selectedDate, fetchWorkLogs, employees.length]);
+    // Initialize when component mounts
+    initializeData();
+  }, []); // Only run once on mount
 
-  // Separate effect to handle filter changes after initial load
+  // Handle filter changes after initialization
   useEffect(() => {
-    if (!isLoading && (selectedEmployee || selectedDate)) {
-      console.log('=== FILTER CHANGED ===');
-      console.log('Selected date:', selectedDate);
-      console.log('Selected employee:', selectedEmployee);
-      
-      const filters: any = {};
-      
-      if (selectedDate) {
-        filters.startDate = selectedDate;
-        filters.endDate = selectedDate;
-      }
-      
-      if (selectedEmployee !== 'all') {
-        filters.employeeId = selectedEmployee;
-      }
-      
-      fetchWorkLogs(filters);
+    if (!isInitialized) return;
+    
+    console.log('=== FILTER CHANGED ===');
+    console.log('Selected date:', selectedDate);
+    console.log('Selected employee:', selectedEmployee);
+    
+    const filters: any = {};
+    
+    if (selectedDate) {
+      filters.startDate = selectedDate;
+      filters.endDate = selectedDate;
     }
-  }, [selectedEmployee, selectedDate, fetchWorkLogs, isLoading]);
+    
+    if (selectedEmployee !== 'all') {
+      filters.employeeId = selectedEmployee;
+    }
+    
+    console.log('Applying filters:', filters);
+    fetchWorkLogs(filters);
+  }, [selectedEmployee, selectedDate, isInitialized, fetchWorkLogs]);
 
   const refreshData = async () => {
+    console.log('=== REFRESHING DATA ===');
     const filters: any = {};
     if (selectedEmployee !== 'all') {
       filters.employeeId = selectedEmployee;
@@ -122,6 +121,7 @@ const TimeTracking = () => {
       
       const logData = {
         ...formData,
+        total_hours: formData.total_hours || 0,
         created_by: admin?.id || 'admin',
       };
 
@@ -153,7 +153,7 @@ const TimeTracking = () => {
       setEditingLog(null);
       setIsDialogOpen(false);
       
-      // Refresh data with current filters
+      // Refresh data
       await refreshData();
     } catch (error) {
       console.error('Error saving work log:', error);
@@ -171,7 +171,7 @@ const TimeTracking = () => {
       employee_id: log.employee_id,
       date: log.date,
       total_hours: log.total_hours || 0,
-      status: log.status,
+      status: log.status || 'present',
       notes: log.notes || '',
     });
     setIsDialogOpen(true);
@@ -198,6 +198,7 @@ const TimeTracking = () => {
       console.log('Updating work log with data:', inlineEditData);
       await updateWorkLog(log.id, {
         ...inlineEditData,
+        total_hours: inlineEditData.total_hours || 0,
         updated_at: new Date().toISOString(),
       });
       await addAdminLog('UPDATE_WORKLOG', `Updated work log for ${log.employees?.name} on ${log.date} (inline edit)`, admin?.id || 'admin');
@@ -208,7 +209,7 @@ const TimeTracking = () => {
       setInlineEditingId(null);
       setInlineEditData({});
       
-      // Refresh data with current filters
+      // Refresh data
       await refreshData();
     } catch (error) {
       console.error('Error updating work log:', error);
@@ -229,7 +230,7 @@ const TimeTracking = () => {
         description: "Work log has been successfully deleted.",
       });
       
-      // Refresh data with current filters
+      // Refresh data
       await refreshData();
     } catch (error) {
       console.error('Error deleting work log:', error);
@@ -257,7 +258,8 @@ const TimeTracking = () => {
   console.log('Filtered logs count:', filteredLogs.length);
   console.log('Selected date:', selectedDate);
   console.log('Selected employee:', selectedEmployee);
-  console.log('Is loading:', isLoading);
+  console.log('Is loading:', workLogsLoading);
+  console.log('Is initialized:', isInitialized);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -269,7 +271,7 @@ const TimeTracking = () => {
     }
   };
 
-  if (isLoading) {
+  if (!isInitialized || workLogsLoading) {
     return (
       <div className="space-y-4 p-4">
         <div className="flex items-center justify-center h-64">
@@ -407,8 +409,16 @@ const TimeTracking = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Work Logs</CardTitle>
-          <CardDescription>Filter and manage work logs</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Work Logs</CardTitle>
+              <CardDescription>Filter and manage work logs</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshData}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
           
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
