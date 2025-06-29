@@ -193,9 +193,19 @@ const TimeTracking = () => {
 
   // Client-side filtering - apply filters to the loaded data
   const filteredLogs = workLogs.filter(log => {
+    console.log('Filtering log:', {
+      id: log.id,
+      date: log.date,
+      employee_name: log.employees?.name,
+      employee_id: log.employee_id,
+      searchTerm,
+      selectedDate,
+      selectedEmployee
+    });
+
     // Search term filter
     const matchesSearch = !searchTerm || 
-      log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      (log.employees?.name && log.employees.name.toLowerCase().includes(searchTerm.toLowerCase()));
     
     // Date filter - only apply if a specific date is selected
     const matchesDate = !selectedDate || log.date === selectedDate;
@@ -203,7 +213,16 @@ const TimeTracking = () => {
     // Employee filter - only apply if a specific employee is selected
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
-    return matchesSearch && matchesDate && matchesEmployee;
+    const result = matchesSearch && matchesDate && matchesEmployee;
+    
+    console.log('Filter result:', {
+      matchesSearch,
+      matchesDate,
+      matchesEmployee,
+      finalResult: result
+    });
+    
+    return result;
   });
 
   console.log('=== CURRENT FILTER STATE ===');
