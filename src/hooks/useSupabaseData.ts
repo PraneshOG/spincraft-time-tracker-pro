@@ -146,26 +146,37 @@ export const useWorkLogs = () => {
       
       console.log('Raw data from Supabase:', data?.length || 0, 'records');
       
-      // Process and validate the data
+      // Process and validate the data with proper number conversion
       const processedData = (data || []).map(log => {
+        // Convert total_hours to number - handle both string and number inputs
+        let totalHours = 0;
+        if (log.total_hours !== null && log.total_hours !== undefined) {
+          if (typeof log.total_hours === 'string') {
+            totalHours = parseFloat(log.total_hours) || 0;
+          } else {
+            totalHours = Number(log.total_hours) || 0;
+          }
+        }
+        
         const processedLog = {
           ...log,
-          total_hours: Number(log.total_hours) || 0,
+          total_hours: totalHours,
           status: log.status || 'present',
           notes: log.notes || '',
           employees: log.employees || { name: 'Unknown', id: log.employee_id }
         };
         
-        console.log(`Processing log ${log.id}: hours=${log.total_hours} -> ${processedLog.total_hours}`);
+        console.log(`Processing log ${log.id}: raw_hours="${log.total_hours}" (${typeof log.total_hours}) -> processed_hours=${processedLog.total_hours} (${typeof processedLog.total_hours})`);
         return processedLog;
       });
       
       console.log('Processed work logs:', processedData.length, 'records');
-      console.log('Sample processed data:', processedData.slice(0, 2).map(log => ({
+      console.log('Sample processed data:', processedData.slice(0, 3).map(log => ({
         id: log.id,
         date: log.date,
         employee: log.employees?.name,
         hours: log.total_hours,
+        hours_type: typeof log.total_hours,
         status: log.status
       })));
       
@@ -190,13 +201,24 @@ export const useWorkLogs = () => {
       console.log('=== ADDING WORK LOG ===');
       console.log('Input data:', workLogData);
       
+      // Ensure total_hours is properly converted to number
+      let totalHours = 0;
+      if (workLogData.total_hours !== null && workLogData.total_hours !== undefined) {
+        if (typeof workLogData.total_hours === 'string') {
+          totalHours = parseFloat(workLogData.total_hours) || 0;
+        } else {
+          totalHours = Number(workLogData.total_hours) || 0;
+        }
+      }
+      
       const dataToInsert = {
         ...workLogData,
-        total_hours: Number(workLogData.total_hours) || 0,
+        total_hours: totalHours,
         status: workLogData.status || 'present'
       };
       
       console.log('Data to insert:', dataToInsert);
+      console.log('Total hours being inserted:', totalHours, typeof totalHours);
       
       const { data, error } = await supabase
         .from('work_logs')
@@ -226,13 +248,24 @@ export const useWorkLogs = () => {
       console.log('ID:', id);
       console.log('Updates:', updates);
       
+      // Ensure total_hours is properly converted to number
+      let totalHours = updates.total_hours;
+      if (totalHours !== null && totalHours !== undefined) {
+        if (typeof totalHours === 'string') {
+          totalHours = parseFloat(totalHours) || 0;
+        } else {
+          totalHours = Number(totalHours) || 0;
+        }
+      }
+      
       const updateData = { 
         ...updates, 
         updated_at: new Date().toISOString(),
-        total_hours: Number(updates.total_hours) || 0
+        total_hours: totalHours
       };
       
       console.log('Final update data:', updateData);
+      console.log('Total hours being updated:', totalHours, typeof totalHours);
       
       const { error } = await supabase
         .from('work_logs')
@@ -281,11 +314,23 @@ export const useWorkLogs = () => {
 
   const addBulkWorkLogs = async (workLogs: Omit<WorkLog, 'id' | 'created_at' | 'updated_at'>[]) => {
     try {
-      const dataToInsert = workLogs.map(log => ({
-        ...log,
-        total_hours: Number(log.total_hours) || 0,
-        status: log.status || 'present'
-      }));
+      const dataToInsert = workLogs.map(log => {
+        // Ensure total_hours is properly converted to number
+        let totalHours = 0;
+        if (log.total_hours !== null && log.total_hours !== undefined) {
+          if (typeof log.total_hours === 'string') {
+            totalHours = parseFloat(log.total_hours) || 0;
+          } else {
+            totalHours = Number(log.total_hours) || 0;
+          }
+        }
+        
+        return {
+          ...log,
+          total_hours: totalHours,
+          status: log.status || 'present'
+        };
+      });
       
       const { error } = await supabase
         .from('work_logs')
@@ -419,7 +464,18 @@ export const useSalaryCalculations = () => {
             hourly_rate: log.employees?.salary_per_hour || 0
           };
         }
-        acc[empId].total_hours += Number(log.total_hours) || 0;
+        
+        // Properly convert hours to number
+        let hours = 0;
+        if (log.total_hours !== null && log.total_hours !== undefined) {
+          if (typeof log.total_hours === 'string') {
+            hours = parseFloat(log.total_hours) || 0;
+          } else {
+            hours = Number(log.total_hours) || 0;
+          }
+        }
+        
+        acc[empId].total_hours += hours;
         return acc;
       }, {});
 
