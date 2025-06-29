@@ -21,7 +21,7 @@ const TimeTracking = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('all');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<any>(null);
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
@@ -36,7 +36,7 @@ const TimeTracking = () => {
     notes: '',
   });
 
-  // Load all work logs on component mount and when needed
+  // Load all work logs on component mount
   useEffect(() => {
     console.log('=== COMPONENT MOUNTED - LOADING ALL WORK LOGS ===');
     loadAllWorkLogs();
@@ -46,7 +46,7 @@ const TimeTracking = () => {
     console.log('=== LOADING ALL WORK LOGS ===');
     try {
       setIsRefreshing(true);
-      // Always fetch ALL work logs without any filters
+      // Always fetch ALL work logs without any filters initially
       await fetchWorkLogs();
       console.log('All work logs loaded successfully');
     } catch (error) {
@@ -191,7 +191,7 @@ const TimeTracking = () => {
     }
   };
 
-  // Client-side filtering with proper debugging
+  // Client-side filtering - apply filters to the loaded data
   const filteredLogs = workLogs.filter(log => {
     // Search term filter
     const matchesSearch = !searchTerm || 
@@ -203,9 +203,7 @@ const TimeTracking = () => {
     // Employee filter - only apply if a specific employee is selected
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
-    const matches = matchesSearch && matchesDate && matchesEmployee;
-    
-    return matches;
+    return matchesSearch && matchesDate && matchesEmployee;
   });
 
   console.log('=== CURRENT FILTER STATE ===');
@@ -233,6 +231,12 @@ const TimeTracking = () => {
       case 'holiday': return 'bg-blue-500';
       default: return 'bg-gray-500';
     }
+  };
+
+  const clearFilters = () => {
+    setSelectedDate('');
+    setSelectedEmployee('all');
+    setSearchTerm('');
   };
 
   return (
@@ -404,7 +408,7 @@ const TimeTracking = () => {
             </Select>
             
             <div className="space-y-1">
-              <Label htmlFor="dateFilter">Filter by Date</Label>
+              <Label htmlFor="dateFilter">Filter by Date (Optional)</Label>
               <Input
                 id="dateFilter"
                 type="date"
@@ -412,6 +416,17 @@ const TimeTracking = () => {
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
             </div>
+
+            {(selectedDate || selectedEmployee !== 'all' || searchTerm) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={clearFilters}
+                className="w-full"
+              >
+                Clear All Filters
+              </Button>
+            )}
           </div>
         </CardHeader>
         
@@ -427,6 +442,7 @@ const TimeTracking = () => {
                   Showing {filteredLogs.length} work log(s) 
                   {selectedDate && ` for ${new Date(selectedDate).toLocaleDateString()}`}
                   {selectedEmployee !== 'all' && ` for ${employees.find(e => e.id === selectedEmployee)?.name}`}
+                  {searchTerm && ` matching "${searchTerm}"`}
                   <br />
                   Total work logs in system: {workLogs.length}
                 </div>
@@ -585,6 +601,7 @@ const TimeTracking = () => {
                 <p className="text-sm mt-2">
                   {selectedDate && `Date: ${new Date(selectedDate).toLocaleDateString()}`}
                   {selectedEmployee !== 'all' && ` | Employee: ${employees.find(e => e.id === selectedEmployee)?.name}`}
+                  {searchTerm && ` | Search: "${searchTerm}"`}
                 </p>
                 <p className="text-sm mt-2">Try adjusting your filters or add a new work log</p>
                 <p className="text-xs mt-2 text-blue-600">

@@ -123,16 +123,18 @@ export const useWorkLogs = () => {
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
 
-      // Apply filters only if specifically requested
+      // Only apply server-side filters if they are specifically requested and not default values
       if (filters?.employeeId && filters.employeeId !== 'all') {
         console.log('Applying employee filter:', filters.employeeId);
         query = query.eq('employee_id', filters.employeeId);
       }
-      if (filters?.startDate) {
+      if (filters?.startDate && filters?.endDate) {
+        console.log('Applying date range filter:', filters.startDate, 'to', filters.endDate);
+        query = query.gte('date', filters.startDate).lte('date', filters.endDate);
+      } else if (filters?.startDate) {
         console.log('Applying start date filter:', filters.startDate);
         query = query.gte('date', filters.startDate);
-      }
-      if (filters?.endDate) {
+      } else if (filters?.endDate) {
         console.log('Applying end date filter:', filters.endDate);
         query = query.lte('date', filters.endDate);
       }
@@ -232,9 +234,6 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log added successfully:', data);
-      
-      // Refresh all data after adding
-      await fetchWorkLogs();
       return data;
     } catch (error) {
       console.error('Error adding work log:', error);
@@ -278,9 +277,6 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log updated successfully');
-      
-      // Refresh all data after updating
-      await fetchWorkLogs();
     } catch (error) {
       console.error('Error updating work log:', error);
       throw error;
@@ -303,9 +299,6 @@ export const useWorkLogs = () => {
       }
       
       console.log('Work log deleted successfully');
-      
-      // Refresh all data after deleting
-      await fetchWorkLogs();
     } catch (error) {
       console.error('Error deleting work log:', error);
       throw error;
@@ -337,9 +330,6 @@ export const useWorkLogs = () => {
         .insert(dataToInsert);
       
       if (error) throw error;
-      
-      // Refresh all data after bulk insert
-      await fetchWorkLogs();
     } catch (error) {
       console.error('Error adding bulk work logs:', error);
       throw error;
