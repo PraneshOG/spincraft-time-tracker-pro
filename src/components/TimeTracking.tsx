@@ -46,21 +46,8 @@ const TimeTracking = () => {
       console.log('Selected employee:', selectedEmployee);
       
       try {
-        const filters: any = {};
-        
-        // Always filter by date
-        if (selectedDate) {
-          filters.startDate = selectedDate;
-          filters.endDate = selectedDate;
-        }
-        
-        // Filter by employee if not 'all'
-        if (selectedEmployee !== 'all') {
-          filters.employeeId = selectedEmployee;
-        }
-        
-        console.log('Applying initial filters:', filters);
-        await fetchWorkLogs(filters);
+        // Load ALL work logs initially, then filter in the component
+        await fetchWorkLogs();
         setIsInitialized(true);
       } catch (error) {
         console.error('Error initializing data:', error);
@@ -72,45 +59,36 @@ const TimeTracking = () => {
       }
     };
 
-    // Initialize when component mounts
     initializeData();
   }, []); // Only run once on mount
 
-  // Handle filter changes after initialization
-  useEffect(() => {
-    if (!isInitialized) return;
-    
-    console.log('=== FILTER CHANGED ===');
-    console.log('Selected date:', selectedDate);
-    console.log('Selected employee:', selectedEmployee);
-    
-    const filters: any = {};
-    
-    if (selectedDate) {
-      filters.startDate = selectedDate;
-      filters.endDate = selectedDate;
-    }
-    
-    if (selectedEmployee !== 'all') {
-      filters.employeeId = selectedEmployee;
-    }
-    
-    console.log('Applying filters:', filters);
-    fetchWorkLogs(filters);
-  }, [selectedEmployee, selectedDate, isInitialized, fetchWorkLogs]);
-
+  // Refresh data when filters change
   const refreshData = async () => {
     console.log('=== REFRESHING DATA ===');
-    const filters: any = {};
-    if (selectedEmployee !== 'all') {
-      filters.employeeId = selectedEmployee;
+    console.log('Current filters - Date:', selectedDate, 'Employee:', selectedEmployee);
+    
+    try {
+      // Always fetch all data and filter in component for better reliability
+      await fetchWorkLogs();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh work logs",
+        variant: "destructive",
+      });
     }
-    if (selectedDate) {
-      filters.startDate = selectedDate;
-      filters.endDate = selectedDate;
-    }
-    await fetchWorkLogs(filters);
   };
+
+  // Refresh when date or employee changes
+  useEffect(() => {
+    if (isInitialized) {
+      console.log('=== FILTER CHANGED ===');
+      console.log('New date:', selectedDate);
+      console.log('New employee:', selectedEmployee);
+      refreshData();
+    }
+  }, [selectedDate, selectedEmployee, isInitialized]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,24 +220,47 @@ const TimeTracking = () => {
     }
   };
 
-  // Filter logs properly with all criteria
+  // Filter logs properly with all criteria - this is the key fix
   const filteredLogs = workLogs.filter(log => {
+    console.log('Filtering log:', {
+      logDate: log.date,
+      selectedDate,
+      logEmployeeId: log.employee_id,
+      selectedEmployee,
+      logName: log.employees?.name,
+      searchTerm
+    });
+
+    // Search term filter
     const matchesSearch = !searchTerm || 
       log.employees?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Date filter - exact match
     const matchesDate = !selectedDate || log.date === selectedDate;
+    
+    // Employee filter
     const matchesEmployee = selectedEmployee === 'all' || log.employee_id === selectedEmployee;
     
-    return matchesSearch && matchesDate && matchesEmployee;
+    const matches = matchesSearch && matchesDate && matchesEmployee;
+    console.log('Filter result:', { matches, matchesSearch, matchesDate, matchesEmployee });
+    
+    return matches;
   });
 
   console.log('=== CURRENT STATE ===');
-  console.log('Work logs count:', workLogs.length);
+  console.log('Total work logs:', workLogs.length);
   console.log('Filtered logs count:', filteredLogs.length);
   console.log('Selected date:', selectedDate);
   console.log('Selected employee:', selectedEmployee);
   console.log('Is loading:', workLogsLoading);
   console.log('Is initialized:', isInitialized);
+  console.log('Filtered logs:', filteredLogs.map(log => ({
+    id: log.id,
+    date: log.date,
+    employee: log.employees?.name,
+    hours: log.total_hours,
+    status: log.status
+  })));
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -414,8 +415,8 @@ const TimeTracking = () => {
               <CardTitle>Work Logs</CardTitle>
               <CardDescription>Filter and manage work logs</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={refreshData}>
-              <RefreshCw className="w-4 h-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={refreshData} disabled={workLogsLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${workLogsLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
@@ -462,6 +463,7 @@ const TimeTracking = () => {
               <>
                 <div className="text-sm text-muted-foreground mb-4">
                   Showing {filteredLogs.length} work log(s) for {selectedDate ? new Date(selectedDate).toLocaleDateString() : 'all dates'}
+                  {selectedEmployee !== 'all' && ` for ${employees.find(e => e.id === selectedEmployee)?.name}`}
                 </div>
                 {filteredLogs.map((log) => (
                   <div key={log.id} className="border rounded-lg p-4 space-y-3">
@@ -615,6 +617,10 @@ const TimeTracking = () => {
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No work logs found for the selected criteria</p>
+                <p className="text-sm mt-2">
+                  {selectedDate && `Date: ${new Date(selectedDate).toLocaleDateString()}`}
+                  {selectedEmployee !== 'all' && ` | Employee: ${employees.find(e => e.id === selectedEmployee)?.name}`}
+                </p>
                 <p className="text-sm mt-2">Try adjusting your filters or add a new work log</p>
               </div>
             )}
