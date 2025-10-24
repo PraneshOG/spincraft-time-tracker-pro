@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Search, Save, X, Clock, RotateCcw, RefreshCw } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Edit, Trash2, Search, Save, X, Clock, RotateCcw, RefreshCw, DollarSign, Calculator } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +29,10 @@ const TimeTracking = () => {
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditData, setInlineEditData] = useState<any>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedEmployeesForSalary, setSelectedEmployeesForSalary] = useState<Set<string>>(new Set());
+  const [showSalaryResults, setShowSalaryResults] = useState(false);
+  const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -234,6 +240,77 @@ const TimeTracking = () => {
       default: return 'bg-gray-500';
     }
   };
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    const newSelection = new Set(selectedEmployeesForSalary);
+    if (newSelection.has(employeeId)) {
+      newSelection.delete(employeeId);
+    } else {
+      newSelection.add(employeeId);
+    }
+    setSelectedEmployeesForSalary(newSelection);
+  };
+
+  const calculateSelectedSalaries = () => {
+    if (selectedEmployeesForSalary.size === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select at least one employee",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const relevantLogs = workLogs.filter(log => 
+      selectedEmployeesForSalary.has(log.employee_id) &&
+      log.date >= salaryStartDate &&
+      log.date <= salaryEndDate &&
+      log.status === 'present'
+    );
+
+    const employeeSalaryMap: Record<string, { name: string; hours: number; rate: number; salary: number }> = {};
+
+    relevantLogs.forEach(log => {
+      const employee = employees.find(e => e.id === log.employee_id);
+      if (employee) {
+        if (!employeeSalaryMap[log.employee_id]) {
+          employeeSalaryMap[log.employee_id] = {
+            name: employee.name,
+            hours: 0,
+            rate: employee.salary_per_hour,
+            salary: 0
+          };
+        }
+        employeeSalaryMap[log.employee_id].hours += Number(log.total_hours) || 0;
+      }
+    });
+
+    // Calculate salaries
+    Object.keys(employeeSalaryMap).forEach(empId => {
+      const data = employeeSalaryMap[empId];
+      data.salary = data.hours * data.rate;
+    });
+
+    setShowSalaryResults(true);
+    return employeeSalaryMap;
+  };
+
+  const salaryResults = showSalaryResults ? calculateSelectedSalaries() : {};
+
+  // Get unique employees from filtered logs
+  const uniqueEmployees = Array.from(new Set(filteredLogs.map(log => log.employee_id)))
+    .map(empId => {
+      const log = filteredLogs.find(l => l.employee_id === empId);
+      const employee = employees.find(e => e.id === empId);
+      return {
+        id: empId,
+        name: log?.employees?.name || employee?.name || 'Unknown',
+        totalHours: filteredLogs
+          .filter(l => l.employee_id === empId && l.status === 'present')
+          .reduce((sum, l) => sum + (Number(l.total_hours) || 0), 0)
+      };
+    })
+    .filter(e => e.totalHours > 0);
 
   return (
     <div className="space-y-4 p-4">
@@ -595,6 +672,125 @@ const TimeTracking = () => {
           </div>
         </CardContent>
       </Card>
+
+      {uniqueEmployees.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="w-5 h-5" />
+                  Salary Calculation
+                </CardTitle>
+                <CardDescription>Select employees to calculate their salaries</CardDescription>
+              </div>
+              {selectedEmployeesForSalary.size > 0 && (
+                <Button onClick={() => {
+                  calculateSelectedSalaries();
+                }} variant="default">
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Calculate ({selectedEmployeesForSalary.size})
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="space-y-1">
+                <Label htmlFor="salaryStartDate">From Date</Label>
+                <Input
+                  id="salaryStartDate"
+                  type="date"
+                  value={salaryStartDate}
+                  onChange={(e) => setSalaryStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="salaryEndDate">To Date</Label>
+                <Input
+                  id="salaryEndDate"
+                  type="date"
+                  value={salaryEndDate}
+                  onChange={(e) => setSalaryEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Select</TableHead>
+                      <TableHead>Employee Name</TableHead>
+                      <TableHead className="text-right">Total Hours</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {uniqueEmployees.map((emp) => (
+                      <TableRow key={emp.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedEmployeesForSalary.has(emp.id)}
+                            onCheckedChange={() => toggleEmployeeSelection(emp.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{emp.name}</TableCell>
+                        <TableCell className="text-right">{emp.totalHours}h</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showSalaryResults && salaryResults && Object.keys(salaryResults).length > 0 && (
+        <Card className="border-2 border-green-500">
+          <CardHeader>
+            <CardTitle className="text-green-700 flex items-center gap-2">
+              <DollarSign className="w-6 h-6" />
+              Salary Calculation Results
+            </CardTitle>
+            <CardDescription>
+              Period: {new Date(salaryStartDate).toLocaleDateString()} to {new Date(salaryEndDate).toLocaleDateString()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead className="text-right">Total Hours</TableHead>
+                    <TableHead className="text-right">Rate/Hour</TableHead>
+                    <TableHead className="text-right">Total Salary</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.values(salaryResults).map((result: any, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{result.name}</TableCell>
+                      <TableCell className="text-right">{result.hours.toFixed(1)}h</TableCell>
+                      <TableCell className="text-right">₹{result.rate}</TableCell>
+                      <TableCell className="text-right font-bold text-green-700">
+                        ₹{result.salary.toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-green-50 font-bold">
+                    <TableCell colSpan={3} className="text-right">Grand Total:</TableCell>
+                    <TableCell className="text-right text-lg text-green-700">
+                      ₹{Object.values(salaryResults).reduce((sum: number, r: any) => sum + r.salary, 0).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
