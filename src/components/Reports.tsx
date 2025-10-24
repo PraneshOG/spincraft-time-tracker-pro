@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileText, Calendar, Users } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Download, FileText, Calendar, Users, DollarSign } from 'lucide-react';
 import { useEmployees, useWorkLogs } from '@/hooks/useSupabaseData';
 
 const Reports = () => {
@@ -16,6 +17,8 @@ const Reports = () => {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
+  const [showSalaryCalculation, setShowSalaryCalculation] = useState(false);
 
   useEffect(() => {
     fetchWorkLogs({
@@ -94,6 +97,39 @@ const Reports = () => {
   };
 
   const summary = generateSummary();
+
+  const toggleEmployeeSelection = (employeeName: string) => {
+    const newSelection = new Set(selectedEmployees);
+    if (newSelection.has(employeeName)) {
+      newSelection.delete(employeeName);
+    } else {
+      newSelection.add(employeeName);
+    }
+    setSelectedEmployees(newSelection);
+  };
+
+  const calculateSalaries = () => {
+    const salaryData: Record<string, { hours: number; rate: number; salary: number; name: string }> = {};
+    
+    Object.entries(summary.employeeStats).forEach(([name, stats]) => {
+      if (selectedEmployees.has(name)) {
+        const employee = employees.find(emp => emp.name === name);
+        if (employee) {
+          const totalSalary = stats.totalHours * employee.salary_per_hour;
+          salaryData[name] = {
+            hours: stats.totalHours,
+            rate: employee.salary_per_hour,
+            salary: totalSalary,
+            name: name
+          };
+        }
+      }
+    });
+    
+    return salaryData;
+  };
+
+  const salaryData = calculateSalaries();
 
   const exportToCSV = () => {
     const headers = ['Employee', 'Employee ID', 'Date', 'Start Time', 'End Time', 'Total Hours', 'Status', 'Notes'];
@@ -265,14 +301,28 @@ const Reports = () => {
       {Object.keys(summary.employeeStats).length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Employee Summary</CardTitle>
-            <CardDescription>Individual employee statistics</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Employee Summary & Salary Calculation</CardTitle>
+                <CardDescription>Select employees to calculate salaries</CardDescription>
+              </div>
+              {selectedEmployees.size > 0 && (
+                <Button 
+                  onClick={() => setShowSalaryCalculation(true)}
+                  variant="default"
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Calculate Salary ({selectedEmployees.size})
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">Select</TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Total Hours</TableHead>
                     <TableHead>Present Days</TableHead>
@@ -284,6 +334,12 @@ const Reports = () => {
                 <TableBody>
                   {Object.entries(summary.employeeStats).map(([name, stats]) => (
                     <TableRow key={name}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedEmployees.has(name)}
+                          onCheckedChange={() => toggleEmployeeSelection(name)}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{name}</TableCell>
                       <TableCell>{Math.round(stats.totalHours * 10) / 10}h</TableCell>
                       <TableCell>{stats.presentDays}</TableCell>
@@ -292,6 +348,47 @@ const Reports = () => {
                       <TableCell>{stats.holidayDays}</TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showSalaryCalculation && Object.keys(salaryData).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Calculated Salaries</CardTitle>
+            <CardDescription>Salary breakdown for selected employees</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Total Hours</TableHead>
+                    <TableHead>Hourly Rate</TableHead>
+                    <TableHead className="text-right">Total Salary</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.values(salaryData).map((data) => (
+                    <TableRow key={data.name}>
+                      <TableCell className="font-medium">{data.name}</TableCell>
+                      <TableCell>{Math.round(data.hours * 10) / 10}h</TableCell>
+                      <TableCell>₹{data.rate}/hr</TableCell>
+                      <TableCell className="text-right font-bold text-lg">
+                        ₹{Math.round(data.salary * 100) / 100}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell colSpan={3} className="text-right">Grand Total:</TableCell>
+                    <TableCell className="text-right text-xl text-primary">
+                      ₹{Math.round(Object.values(salaryData).reduce((sum, d) => sum + d.salary, 0) * 100) / 100}
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
