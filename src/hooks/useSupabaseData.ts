@@ -115,9 +115,9 @@ export const useWorkLogs = () => {
         .from('work_logs')
         .select(`
           *,
-          employees (
-            name,
-            id
+          employees!inner (
+            id,
+            name
           )
         `)
         .order('date', { ascending: false })
@@ -163,7 +163,10 @@ export const useWorkLogs = () => {
           total_hours: totalHours,
           status: log.status || 'present',
           notes: log.notes || '',
-          employees: log.employees || { name: 'Unknown', id: log.employee_id }
+          employees: log.employees ? { 
+            name: log.employees.name, 
+            employee_id: log.employees.id 
+          } : { name: 'Unknown', employee_id: log.employee_id || '' }
         };
         
         console.log(`Processing log ${log.id}: raw_hours="${log.total_hours}" (${typeof log.total_hours}) -> processed_hours=${processedLog.total_hours} (${typeof processedLog.total_hours})`);
