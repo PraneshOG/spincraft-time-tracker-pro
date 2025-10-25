@@ -33,6 +33,7 @@ const TimeTracking = () => {
   const [showSalaryResults, setShowSalaryResults] = useState(false);
   const [salaryStartDate, setSalaryStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryEndDate, setSalaryEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryResults, setSalaryResults] = useState<Record<string, { name: string; hours: number; rate: number; salary: number }>>({});
 
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -291,26 +292,13 @@ const TimeTracking = () => {
       data.salary = data.hours * data.rate;
     });
 
+    setSalaryResults(employeeSalaryMap);
     setShowSalaryResults(true);
-    return employeeSalaryMap;
   };
 
-  const salaryResults = showSalaryResults ? calculateSelectedSalaries() : {};
+  
 
-  // Get unique employees from filtered logs
-  const uniqueEmployees = Array.from(new Set(filteredLogs.map(log => log.employee_id)))
-    .map(empId => {
-      const log = filteredLogs.find(l => l.employee_id === empId);
-      const employee = employees.find(e => e.id === empId);
-      return {
-        id: empId,
-        name: log?.employees?.name || employee?.name || 'Unknown',
-        totalHours: filteredLogs
-          .filter(l => l.employee_id === empId && l.status === 'present')
-          .reduce((sum, l) => sum + (Number(l.total_hours) || 0), 0)
-      };
-    })
-    .filter(e => e.totalHours > 0);
+  // Salary selection list shows all employees below
 
   return (
     <div className="space-y-4 p-4">
@@ -673,60 +661,61 @@ const TimeTracking = () => {
         </CardContent>
       </Card>
 
-      {uniqueEmployees.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator className="w-5 h-5" />
-                  Salary Calculation
-                </CardTitle>
-                <CardDescription>Select employees to calculate their salaries</CardDescription>
-              </div>
-              {selectedEmployeesForSalary.size > 0 && (
-                <Button onClick={() => {
-                  calculateSelectedSalaries();
-                }} variant="default">
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  Calculate ({selectedEmployeesForSalary.size})
-                </Button>
-              )}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="w-5 h-5" />
+                Salary Calculation
+              </CardTitle>
+              <CardDescription>Select employees to calculate their salaries</CardDescription>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <div className="space-y-1">
-                <Label htmlFor="salaryStartDate">From Date</Label>
-                <Input
-                  id="salaryStartDate"
-                  type="date"
-                  value={salaryStartDate}
-                  onChange={(e) => setSalaryStartDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="salaryEndDate">To Date</Label>
-                <Input
-                  id="salaryEndDate"
-                  type="date"
-                  value={salaryEndDate}
-                  onChange={(e) => setSalaryEndDate(e.target.value)}
-                />
-              </div>
+            {selectedEmployeesForSalary.size > 0 && (
+              <Button onClick={calculateSelectedSalaries} variant="default">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Calculate ({selectedEmployeesForSalary.size})
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="space-y-1">
+              <Label htmlFor="salaryStartDate">From Date</Label>
+              <Input
+                id="salaryStartDate"
+                type="date"
+                value={salaryStartDate}
+                onChange={(e) => setSalaryStartDate(e.target.value)}
+              />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">Select</TableHead>
-                      <TableHead>Employee Name</TableHead>
-                      <TableHead className="text-right">Total Hours</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {uniqueEmployees.map((emp) => (
+            <div className="space-y-1">
+              <Label htmlFor="salaryEndDate">To Date</Label>
+              <Input
+                id="salaryEndDate"
+                type="date"
+                value={salaryEndDate}
+                onChange={(e) => setSalaryEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">Select</TableHead>
+                    <TableHead>Employee Name</TableHead>
+                    <TableHead className="text-right">Total Hours (range)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((emp) => {
+                    const hours = workLogs
+                      .filter(l => l.employee_id === emp.id && l.date >= salaryStartDate && l.date <= salaryEndDate && l.status === 'present')
+                      .reduce((sum, l) => sum + (Number(l.total_hours) || 0), 0);
+                    return (
                       <TableRow key={emp.id}>
                         <TableCell>
                           <Checkbox
@@ -735,16 +724,16 @@ const TimeTracking = () => {
                           />
                         </TableCell>
                         <TableCell className="font-medium">{emp.name}</TableCell>
-                        <TableCell className="text-right">{emp.totalHours}h</TableCell>
+                        <TableCell className="text-right">{hours}h</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       {showSalaryResults && salaryResults && Object.keys(salaryResults).length > 0 && (
         <Card className="border-2 border-green-500">
