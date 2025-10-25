@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Save, Calendar, Calculator, DollarSign } from 'lucide-react';
 import { useEmployees, useWorkLogs, useAdminLogs } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,6 +38,8 @@ const BulkTimeTracking = () => {
   const [salaryResults, setSalaryResults] = useState<SalaryResult[]>([]);
   const [showSalaryResults, setShowSalaryResults] = useState(false);
   const [lastSyncedDate, setLastSyncedDate] = useState<string | null>(null);
+  const [selectedEmployeesForSalary, setSelectedEmployeesForSalary] = useState<Set<string>>(new Set());
+  const [salaryRangeLogs, setSalaryRangeLogs] = useState<any[]>([]);
 
   useEffect(() => {
     fetchWorkLogs({ startDate: selectedDate, endDate: selectedDate });
@@ -60,6 +63,23 @@ const BulkTimeTracking = () => {
     }
   }, [employees, selectedDate, workLogs, lastSyncedDate]);
 
+  // Fetch logs for the selected salary date range (independent from editor table)
+  useEffect(() => {
+    const fetchRange = async () => {
+      const { data, error } = await supabase
+        .from('work_logs')
+        .select('employee_id, total_hours, status, date')
+        .gte('date', salaryStartDate)
+        .lte('date', salaryEndDate)
+        .eq('status', 'present');
+      if (error) {
+        console.error('Error fetching salary range logs:', error.message);
+        return;
+      }
+      setSalaryRangeLogs(data || []);
+    };
+    fetchRange();
+  }, [salaryStartDate, salaryEndDate]);
   const updateEmployeeHours = (employeeId: string, hours: number) => {
     setEmployeeHours(prev => ({
       ...prev,
@@ -78,6 +98,12 @@ const BulkTimeTracking = () => {
         status
       }
     }));
+  };
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    const next = new Set(selectedEmployeesForSalary);
+    if (next.has(employeeId)) next.delete(employeeId); else next.add(employeeId);
+    setSelectedEmployeesForSalary(next);
   };
 
   const handleSaveAll = async () => {
@@ -144,13 +170,23 @@ const BulkTimeTracking = () => {
         return;
       }
 
-      const { data: workLogsForSalary, error } = await supabase.from('work_logs').select(`*, employees (id, name, salary_per_hour)`).gte('date', salaryStartDate).lte('date', salaryEndDate).eq('status', 'present');
+      if (selectedEmployeesForSalary.size === 0) {
+        toast({ title: 'No Employees Selected', description: 'Please select at least one employee to calculate salary.', variant: 'destructive' });
+        return;
+      }
+
+      const { data: workLogsForSalary, error } = await supabase
+        .from('work_logs')
+        .select(`*, employees (id, name, salary_per_hour)`) 
+        .gte('date', salaryStartDate)
+        .lte('date', salaryEndDate)
+        .eq('status', 'present');
       if (error) throw error;
 
       const employeeTotals: Record<string, SalaryResult> = {};
-      
       workLogsForSalary?.forEach((log: any) => {
         const empId = log.employee_id;
+        if (!selectedEmployeesForSalary.has(empId)) return; // only selected employees
         if (!employeeTotals[empId]) {
           employeeTotals[empId] = {
             employee_id: empId,
@@ -217,10 +253,42 @@ const BulkTimeTracking = () => {
               <Input id="salary-end-date" type="date" value={salaryEndDate} onChange={e => setSalaryEndDate(e.target.value)} className="w-auto min-w-48 text-base" />
             </div>
             <Button onClick={handleCalculateSalary} variant="outline" size="lg">
-              <Calculator className="w-5 h-5 mr-2" /> Calculate Salary
+              <Calculator className="w-5 h-5 mr-2" /> Calculate Salary {selectedEmployeesForSalary.size > 0 ? `(${selectedEmployeesForSalary.size})` : ''}
             </Button>
           </div>
         </CardHeader>
+        <CardContent>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">Select</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="text-right">Total Hours (range)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {employees.map((emp) => {
+                  const hours = salaryRangeLogs
+                    .filter(l => l.employee_id === emp.id)
+                    .reduce((sum, l) => sum + (Number(l.total_hours) || 0), 0);
+                  return (
+                    <TableRow key={emp.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedEmployeesForSalary.has(emp.id)}
+                          onCheckedChange={() => toggleEmployeeSelection(emp.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{emp.name}</TableCell>
+                      <TableCell className="text-right">{hours}h</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
       </Card>
 
       {showSalaryResults && salaryResults.length > 0 && (
